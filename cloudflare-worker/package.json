@@ -1,0 +1,37 @@
+{
+  "name": "dress-printful-worker",
+  "version": "2.0.0",
+  "description": "Cloudflare Worker for DRESS Website - Printful API Integration",
+  "main": "worker.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production",
+    "tail": "wrangler tail",
+    "test": "jest",
+    "lint": "eslint worker.js",
+    "format": "prettier --write *.js"
+  },
+  "keywords": [
+    "cloudflare",
+    "worker",
+    "printful",
+    "api",
+    "cors",
+    "dress",
+    "ecommerce"
+  ],
+  "author": "Alejandro Liendo",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241008.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.0.3",
+    "wrangler": "^3.78.12"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

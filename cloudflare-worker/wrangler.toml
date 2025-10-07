@@ -1,0 +1,58 @@
+# Cloudflare Worker Configuration for DRESS Website
+name = "dress-printful-worker"
+main = "worker.js"
+compatibility_date = "2024-10-07"
+compatibility_flags = ["nodejs_compat"]
+
+# Worker Settings
+workers_dev = true
+route = ""
+zone_id = ""
+
+# Environment Variables
+[env.production.vars]
+ENVIRONMENT = "production"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+
+# Secrets (use `wrangler secret put` to set these)
+# wrangler secret put PRINTFUL_API_KEY
+# These will be available as environment variables in your worker
+
+# KV Namespaces (if you want to use persistent storage)
+# [[kv_namespaces]]
+# binding = "DRESS_CACHE"
+# id = "your-kv-namespace-id"
+# preview_id = "your-preview-kv-namespace-id"
+
+# Durable Objects (if needed for advanced features)
+# [[durable_objects.bindings]]
+# name = "DRESS_COUNTER"
+# class_name = "Counter"
+
+# Custom domains (configure after setting up)
+# routes = [
+#   { pattern = "api.yourdomain.com/*", zone_id = "your-zone-id" }
+# ]
+
+# Build configuration
+[build]
+command = "echo 'No build step required'"
+cwd = "./"
+watch_dir = "./"
+
+# Limits and configuration
+[limits]
+cpu_ms = 50
+
+# Development configuration
+[dev]
+ip = "localhost"
+port = 8787
+local_protocol = "http"
+upstream_protocol = "https"
+
+# Triggers (for scheduled workers, if needed)
+# [[triggers.crons]]
+# cron = "0 0 * * *"  # Daily at midnight
