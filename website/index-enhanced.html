@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dress - Premium Custom Apparel with Variants</title>
+    <meta name="description" content="Dress - Premium custom apparel and unique accessories. Discover t-shirts, hoodies, caps and exclusive designs with multiple colors and sizes.">
+    
+    <!-- Modern serif editorial and sans-serif fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Enhanced Styles -->
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/enhanced-style.css">
+    <link rel="stylesheet" href="css/variants-enhanced.css">
+</head>
+<body>
+    <!-- Enhanced Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <h1>Dress</h1>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="#home" class="nav-link"><i class="fas fa-home"></i> Home</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#products" class="nav-link"><i class="fas fa-shopping-bag"></i> Products</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#contact" class="nav-link"><i class="fas fa-envelope"></i> Contact</a>
+                </li>
+                <li class="nav-item">
+                    <a href="terms.html" class="nav-link"><i class="fas fa-file-contract"></i> Terms</a>
+                </li>
+            </ul>
+            <div class="nav-extras">
+                <button class="cart-btn" onclick="openCart()">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="cart-count">0</span>
+                </button>
+                <div class="theme-toggle" onclick="toggleTheme()">
+                    <i class="fas fa-moon"></i>
+                </div>
+            </div>
+            <div class="hamburger">
+                <span class="bar"></span>
+                <span class="bar"></span>
+                <span class="bar"></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Enhanced Hero Section -->
+    <section id="home" class="hero">
+        <div class="hero-background">
+            <div class="hero-particles"></div>
+        </div>
+        <div class="hero-content">
+            <div class="hero-badge">New Collection 2025 • Multiple Variants</div>
+            <h2>Premium Custom Apparel</h2>
+            <p>Express your unique style with our exclusive collection of custom apparel and accessories in multiple colors and sizes</p>
+            <div class="hero-buttons">
+                <button class="cta-button primary" onclick="scrollToProducts()">
+                    <span>Shop Now</span>
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+                <button class="cta-button secondary" onclick="openLookbook()">
+                    <span>Catalog</span>
+                    <i class="fas fa-images"></i>
+                </button>
+            </div>
+            <div class="hero-stats">
+                <div class="stat-item">
+                    <span class="stat-number">10K+</span>
+                    <span class="stat-label">Happy Customers</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">100+</span>
+                    <span class="stat-label">Product Variants</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">24/7</span>
+                    <span class="stat-label">Support</span>
+                </div>
+            </div>
+        </div>
+        <div class="scroll-indicator">
+            <i class="fas fa-chevron-down"></i>
+        </div>
+    </section>
+
+    <!-- Featured Categories Section -->
+    <section class="categories-section">
+        <div class="container">
+            <h2 class="section-title">
+                Shop by <span class="title-highlight">Category</span>
+            </h2>
+            <p style="text-align: center; color: var(--dark-gray); margin-bottom: 2rem; font-size: 1.125rem;">
+                Explore our curated collections with multiple colors, sizes, and styles
+            </p>
+            <div class="categories-grid">
+                <div class="category-card" data-category="t-shirts" onclick="filterProducts('t-shirts')">
+                    <div class="category-image">
+                        <img src="images/t-shirts/mockup.jpg" alt="T-Shirts Collection" loading="lazy">
+                        <div class="category-overlay">
+                            <div class="category-info">
+                                <h3>T-Shirts</h3>
+                                <p>Premium quality tees in multiple colors</p>
+                                <span class="shop-now">Shop Now <i class="fas fa-arrow-right"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="category-card" data-category="hoodies" onclick="filterProducts('hoodies')">
+                    <div class="category-image">
+                        <img src="images/hoodies/mockup.jpg" alt="Hoodies Collection" loading="lazy">
+                        <div class="category-overlay">
+                            <div class="category-info">
+                                <h3>Hoodies</h3>
+                                <p>Comfort meets style in all sizes</p>
+                                <span class="shop-now">Shop Now <i class="fas fa-arrow-right"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="category-card" data-category="caps" onclick="filterProducts('caps')">
+                    <div class="category-image">
+                        <img src="images/caps/mockup.jpg" alt="Caps Collection" loading="lazy">
+                        <div class="category-overlay">
+                            <div class="category-info">
+                                <h3>Caps</h3>
+                                <p>Complete your look with style</p>
+                                <span class="shop-now">Shop Now <i class="fas fa-arrow-right"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="category-card" data-category="accessories" onclick="filterProducts('accessories')">
+                    <div class="category-image">
+                        <img src="images/accessories/mockup.jpg" alt="Accessories Collection" loading="lazy">
+                        <div class="category-overlay">
+                            <div class="category-info">
+                                <h3>Accessories</h3>
+                                <p>Perfect finishing touches</p>
+                                <span class="shop-now">Shop Now <i class="fas fa-arrow-right"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Enhanced Features Section -->
+    <section class="features-section" style="padding: 4rem 0; background: var(--light-gray);">
+        <div class="container">
+            <h2 class="section-title">
+                Why Choose <span class="title-highlight">Dress</span>
+            </h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin-top: 3rem;">
+                <div style="text-align: center; padding: 2rem; background: var(--primary-white); border-radius: var(--element-radius); box-shadow: var(--shadow-light);">
+                    <div style="width: 60px; height: 60px; background: linear-gradient(135deg, var(--primary-orange), var(--accent-gold)); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; color: white; font-size: 1.5rem;">
+                        <i class="fas fa-palette"></i>
+                    </div>
+                    <h3 style="font-family: var(--font-serif); font-size: 1.25rem; margin-bottom: 1rem; color: var(--primary-black);">Multiple Variants</h3>
+                    <p style="color: var(--dark-gray); line-height: 1.6;">Every product comes with multiple color and size options to match your style perfectly.</p>
+                </div>
+                
+                <div style="text-align: center; padding: 2rem; background: var(--primary-white); border-radius: var(--element-radius); box-shadow: var(--shadow-light);">
+                    <div style="width: 60px; height: 60px; background: linear-gradient(135deg, var(--primary-orange), var(--accent-gold)); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; color: white; font-size: 1.5rem;">
+                        <i class="fas fa-star"></i>
+                    </div>
+                    <h3 style="font-family: var(--font-serif); font-size: 1.25rem; margin-bottom: 1rem; color: var(--primary-black);">Premium Quality</h3>
+                    <p style="color: var(--dark-gray); line-height: 1.6;">High-quality materials and printing techniques ensure your apparel looks great and lasts long.</p>
+                </div>
+                
+                <div style="text-align: center; padding: 2rem; background: var(--primary-white); border-radius: var(--element-radius); box-shadow: var(--shadow-light);">
+                    <div style="width: 60px; height: 60px; background: linear-gradient(135deg, var(--primary-orange), var(--accent-gold)); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; color: white; font-size: 1.5rem;">
+                        <i class="fas fa-shipping-fast"></i>
+                    </div>
+                    <h3 style="font-family: var(--font-serif); font-size: 1.25rem; margin-bottom: 1rem; color: var(--primary-black);">Fast Shipping</h3>
+                    <p style="color: var(--dark-gray); line-height: 1.6;">Quick turnaround times and reliable shipping to get your custom apparel when you need it.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Trends Section -->
+    <section class="trends-section">
+        <div class="container">
+            <h2 class="section-title">
+                <span class="title-highlight">Latest Trends</span> & News
+            </h2>
+            <div class="slider-container">
+                <div class="slider">
+                    <div class="slide active">
+                        <div class="slide-content">
+                            <div class="slide-icon"><i class="fas fa-star"></i></div>
+                            <h3>New Collection 2025</h3>
+                            <p>Discover our latest designs with cutting-edge graphics and premium quality materials in multiple color variants</p>
+                            <button class="slide-btn" onclick="scrollToProducts()">Explore Now</button>
+                        </div>
+                    </div>
+                    <div class="slide">
+                        <div class="slide-content">
+                            <div class="slide-icon"><i class="fas fa-fire"></i></div>
+                            <h3>Limited Edition Variants</h3>
+                            <p>Exclusive color combinations and special edition designs available for a limited time only</p>
+                            <button class="slide-btn" onclick="filterProducts('hoodies')">View Limited</button>
+                        </div>
+                    </div>
+                    <div class="slide">
+                        <div class="slide-content">
+                            <div class="slide-icon"><i class="fas fa-crown"></i></div>
+                            <h3>Custom Accessories</h3>
+                            <p>Personalize your look with our range of caps, mugs and unique accessories in various styles</p>
+                            <button class="slide-btn" onclick="filterProducts('accessories')">Customize</button>
+                        </div>
+                    </div>
+                </div>
+                <button class="slider-btn prev" onclick="changeSlide(-1)"><i class="fas fa-chevron-left"></i></button>
+                <button class="slider-btn next" onclick="changeSlide(1)"><i class="fas fa-chevron-right"></i></button>
+                <div class="slider-dots">
+                    <span class="dot active" onclick="currentSlide(1)"></span>
+                    <span class="dot" onclick="currentSlide(2)"></span>
+                    <span class="dot" onclick="currentSlide(3)"></span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Enhanced Dynamic Products Section with Variant Support -->
+    <section id="products" class="products-section">
+        <div class="container">
+            <h2 class="section-title">
+                Our <span class="title-highlight">Premium</span> Products
+            </h2>
+            
+            <p style="text-align: center; color: var(--dark-gray); margin-bottom: 2rem; font-size: 1.125rem;">
+                Explore our complete collection with multiple colors, sizes, and variants for every style
+            </p>
+            
+            <!-- Enhanced Product Filters -->
+            <div class="products-filter">
+                <button class="filter-btn active" data-filter="all" onclick="filterProducts('all')">
+                    <i class="fas fa-th"></i> All Products
+                </button>
+                <button class="filter-btn" data-filter="t-shirts" onclick="filterProducts('t-shirts')">
+                    <i class="fas fa-tshirt"></i> T-Shirts
+                </button>
+                <button class="filter-btn" data-filter="hoodies" onclick="filterProducts('hoodies')">
+                    <i class="fas fa-hoodie"></i> Hoodies
+                </button>
+                <button class="filter-btn" data-filter="caps" onclick="filterProducts('caps')">
+                    <i class="fas fa-hat-cowboy"></i> Caps
+                </button>
+                <button class="filter-btn" data-filter="accessories" onclick="filterProducts('accessories')">
+                    <i class="fas fa-gem"></i> Accessories
+                </button>
+            </div>
+
+            <!-- Enhanced Products Container with Variant Support -->
+            <div id="products-container" class="products-dynamic-container">
+                <!-- Enhanced Product HTML with variants will be generated dynamically here -->
+                
+                <!-- Loading state -->
+                <div id="products-loading" class="loading-state" style="text-align: center; padding: 4rem;">
+                    <div class="loading-spinner" style="width: 40px; height: 40px; border: 4px solid var(--light-gray); border-top: 4px solid var(--primary-orange); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+                    <p style="margin-top: 1.5rem; color: var(--dark-gray); font-size: 1.125rem;">Loading products with variants...</p>
+                    <p style="color: var(--dark-gray); font-size: 0.875rem; margin-top: 0.5rem;">Fetching colors, sizes, and images from Printful</p>
+                </div>
+                
+                <!-- Error state -->
+                <div id="products-error" class="error-state" style="text-align: center; padding: 4rem; display: none;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--primary-orange); margin-bottom: 1.5rem;"></i>
+                    <h3 style="color: var(--primary-black); margin-bottom: 1rem;">Unable to load products</h3>
+                    <p style="color: var(--dark-gray); margin-bottom: 2rem;">We're having trouble connecting to our product catalog.</p>
+                    <button onclick="loadProductsEnhanced(true)" class="cta-button primary">
+                        <i class="fas fa-redo"></i> Try Again
+                    </button>
+                </div>
+                
+                <!-- Empty state -->
+                <div id="products-empty" class="empty-state" style="text-align: center; padding: 4rem; display: none;">
+                    <i class="fas fa-box-open" style="font-size: 3rem; color: var(--dark-gray); margin-bottom: 1.5rem;"></i>
+                    <h3 style="color: var(--primary-black); margin-bottom: 1rem;">No products available</h3>
+                    <p style="color: var(--dark-gray);">Please check back later or contact support.</p>
+                </div>
+            </div>
+
+            <!-- Load More Button -->
+            <div class="load-more-container" style="text-align: center; margin-top: 3rem; display: none;">
+                <button class="cta-button secondary" onclick="loadMoreProducts()">
+                    <span>Load More Products</span>
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section id="contact" class="contact-section">
+        <div class="container">
+            <h2 class="section-title">
+                <span class="title-highlight">Get in</span> Touch
+            </h2>
+            <div class="contact-content">
+                <div class="contact-info">
+                    <h3>Have any questions about our products?</h3>
+                    <p>We're here to help you with any inquiries about our custom apparel, variants, sizing, or services.</p>
+                    <div class="contact-methods">
+                        <div class="contact-method">
+                            <i class="fas fa-envelope"></i>
+                            <span>info@dress.com</span>
+                        </div>
+                        <div class="contact-method">
+                            <i class="fas fa-phone"></i>
+                            <span>+1 (555) 123-4567</span>
+                        </div>
+                        <div class="contact-method">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>Your Location, City, Country</span>
+                        </div>
+                        <div class="contact-method">
+                            <i class="fas fa-clock"></i>
+                            <span>Mon-Fri: 9AM-6PM EST</span>
+                        </div>
+                    </div>
+                </div>
+                <form id="contactForm" class="contact-form">
+                    <div class="form-group">
+                        <input type="text" id="name" name="name" placeholder="Your name" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="email" id="email" name="email" placeholder="Your email" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="text" id="subject" name="subject" placeholder="Subject (optional)">
+                    </div>
+                    <div class="form-group">
+                        <textarea id="message" name="message" placeholder="Your message (e.g., questions about sizing, colors, etc.)" rows="5" required></textarea>
+                    </div>
+                    <button type="submit" class="submit-btn">
+                        <span>Send Message</span>
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>Dress</h3>
+                    <p>Premium custom apparel with multiple variants to express your unique style perfectly.</p>
+                    <div class="social-links">
+                        <a href="#" class="social-link"><i class="fab fa-facebook-f"></i></a>
+                        <a href="#" class="social-link"><i class="fab fa-instagram"></i></a>
+                        <a href="#" class="social-link"><i class="fab fa-twitter"></i></a>
+                        <a href="#" class="social-link"><i class="fab fa-youtube"></i></a>
+                    </div>
+                </div>
+                <div class="footer-section">
+                    <h4>Products</h4>
+                    <ul>
+                        <li><a href="#" onclick="filterProducts('t-shirts')">T-Shirts</a></li>
+                        <li><a href="#" onclick="filterProducts('hoodies')">Hoodies</a></li>
+                        <li><a href="#" onclick="filterProducts('caps')">Caps</a></li>
+                        <li><a href="#" onclick="filterProducts('accessories')">Accessories</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Information</h4>
+                    <ul>
+                        <li><a href="#">About Us</a></li>
+                        <li><a href="#">Size Guide</a></li>
+                        <li><a href="#">Color Options</a></li>
+                        <li><a href="#">Shipping</a></li>
+                        <li><a href="#">Returns</a></li>
+                        <li><a href="terms.html">Terms & Conditions</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Support</h4>
+                    <ul>
+                        <li><a href="#">Help Center</a></li>
+                        <li><a href="#contact">Contact</a></li>
+                        <li><a href="#">Live Chat</a></li>
+                        <li><a href="#">Sizing FAQ</a></li>
+                        <li><a href="#">Variant Guide</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Dress. All rights reserved. | Powered by Printful API</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Enhanced Scripts -->
+    <script src="js/app.js"></script>
+    <script src="js/products.js"></script>
+    <script src="js/products-enhanced.js"></script>
+    
+    <!-- Add custom CSS for loading animation -->
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--light-gray);
+            border-top: 4px solid var(--primary-orange);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        .products-filter {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 3rem;
+            padding: 1.5rem;
+            background: var(--light-gray);
+            border-radius: var(--element-radius);
+        }
+        
+        .filter-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: 2px solid var(--medium-gray);
+            border-radius: 25px;
+            background: var(--primary-white);
+            color: var(--primary-black);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+        
+        .filter-btn:hover {
+            border-color: var(--primary-orange);
+            background: rgba(255, 107, 53, 0.1);
+            color: var(--primary-orange);
+        }
+        
+        .filter-btn.active {
+            background: var(--primary-orange);
+            color: var(--primary-white);
+            border-color: var(--primary-orange);
+        }
+        
+        @media (max-width: 768px) {
+            .products-filter {
+                gap: 0.75rem;
+                padding: 1rem;
+            }
+            
+            .filter-btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.875rem;
+            }
+        }
+    </style>
+</body>
+</html>
