@@ -3,13 +3,11 @@
 
 const CONFIG = {
   PRINTFUL_API_BASE: 'https://api.printful.com',
-  ALLOWED_ORIGINS: [
-    'https://newdress-cgz.pages.dev',    // your Pages domain
-    'https://dress-custom-apparel.pages.dev',
-    'https://dress.example.com',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000'
-  ],
+      // Si quieres que Pages pueda llamar tu Worker, asegúrate que ALLOWED_ORIGINS incluye tu dominio Pages:
+    ALLOWED_ORIGINS: [
+        'https://newdress-cgz.pages.dev', // tu Pages
+        // otros si quieres
+    ],
   CACHE_TTL: 600, // 10 minutes for product data
   RATE_LIMIT: {
     MAX_REQUESTS: 100,
