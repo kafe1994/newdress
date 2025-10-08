@@ -1,855 +1,477 @@
-// Enhanced DRESS Website JavaScript
-// Version: 2.0 - Enhanced with better Printful integration
+// JavaScript para Productos Dinámicos - Dress
+// Manejo de productos desde API de Printful
 
-// Global Variables
-let currentSlide = 0;
-const slides = document.querySelectorAll('.slide');
-const dots = document.querySelectorAll('.dot');
-let isLoading = false;
-let cartItems = [];
-let favorites = JSON.parse(localStorage.getItem('dress_favorites')) || [];
-
-// Configuration
-const CONFIG = {
-    // Cloudflare Worker endpoint - update this with your worker URL
-    WORKER_BASE: '/api/printful',
-    
-    // Local store mapping for fallback
-    STORE_PATHS: {
-        't-shirts': '/products/t-shirts',
-        'hoodies': '/products/hoodies', 
-        'caps': '/products/caps',
-        'accessories': '/products/accessories',
-        'other': '/products/custom-mugs'
-    },
-    
-    // Animation settings
-    SLIDE_INTERVAL: 6000,
-    INTERSECTION_THRESHOLD: 0.1,
-    
-    // API settings
-    REQUEST_TIMEOUT: 10000,
-    RETRY_ATTEMPTS: 3
+// Configuración global
+const DRESS_CONFIG = {
+    API_ENDPOINT: '/api/printful/products', // Ajusta según tu worker
+    RETRY_ATTEMPTS: 3,
+    RETRY_DELAY: 1000,
+    CACHE_DURATION: 5 * 60 * 1000, // 5 minutos
 };
 
-// DOM Content Loaded Event
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🎨 DRESS Website - Enhanced Version Initializing...');
-    initializeApp();
-    setupEventListeners();
-    setupIntersectionObserver();
-    initializeAnimations();
-    loadUserPreferences();
-});
-
-// Initialize Application
-function initializeApp() {
-    try {
-        // Initialize slider
-        if (slides.length > 0) {
-            showSlide(0);
-            startSlideAutoplay();
-        }
-
-        // Initialize smooth scrolling
-        initializeSmoothScrolling();
-        
-        // Initialize product filters
-        initializeProductFilters();
-        
-        // Initialize theme
-        initializeTheme();
-        
-        // Update cart display
-        updateCartDisplay();
-        
-        // Load favorites
-        updateFavoritesDisplay();
-        
-        console.log('✅ DRESS Website - Initialized successfully');
-    } catch (error) {
-        console.error('❌ Initialization error:', error);
-        showNotification('Website initialization failed. Please refresh the page.', 'error');
+// Cache de productos
+let productsCache = {
+    data: null,
+    timestamp: null,
+    isValid() {
+        return this.data && this.timestamp && 
+               (Date.now() - this.timestamp) < DRESS_CONFIG.CACHE_DURATION;
+    },
+    set(data) {
+        this.data = data;
+        this.timestamp = Date.now();
+    },
+    clear() {
+        this.data = null;
+        this.timestamp = null;
     }
+};
+
+// Estado de favoritos
+let favorites = JSON.parse(localStorage.getItem('dress_favorites')) || [];
+
+// Función principal para generar HTML de productos
+function generateProductsHTML(products) {
+    if (!products || products.length === 0) {
+        showEmptyState();
+        return '';
+    }
+
+    // Agrupar productos por categoría
+    const productsByCategory = groupProductsByCategory(products);
+    
+    // Generar HTML
+    let html = '';
+    Object.entries(productsByCategory).forEach(([category, categoryProducts]) => {
+        html += generateCategoryHTML(category, categoryProducts);
+    });
+
+    return html;
 }
 
-// Enhanced Event Listeners Setup
-function setupEventListeners() {
-    try {
-        // Mobile menu toggle
-        const hamburger = document.querySelector('.hamburger');
-        const navMenu = document.querySelector('.nav-menu');
+// Agrupar productos por categoría
+function groupProductsByCategory(products) {
+    return products.reduce((acc, item) => {
+        const category = normalizeCategory(item.product.category);
+        if (!acc[category]) {
+            acc[category] = [];
+        }
+        acc[category].push(item);
+        return acc;
+    }, {});
+}
 
-        if (hamburger && navMenu) {
-            hamburger.addEventListener('click', toggleMobileMenu);
+// Normalizar nombre de categoría
+function normalizeCategory(category) {
+    if (!category) return 'other';
+    return category.toLowerCase().replace(/[^a-z0-9]/g, '-');
+}
+
+// Obtener nombre de categoría en español
+function getCategoryDisplayName(category) {
+    const categoryNames = {
+        't-shirts': 'Camisetas',
+        'camisetas': 'Camisetas',
+        'hoodies': 'Sudaderas',
+        'sudaderas': 'Sudaderas',
+        'caps': 'Gorras',
+        'gorras': 'Gorras',
+        'hats': 'Gorras',
+        'accessories': 'Accesorios',
+        'accesorios': 'Accesorios',
+        'mugs': 'Tazas',
+        'tazas': 'Tazas',
+        'bags': 'Bolsas',
+        'bolsas': 'Bolsas',
+        'other': 'Otros Productos',
+        'otros': 'Otros Productos'
+    };
+    
+    return categoryNames[category] || 
+           category.charAt(0).toUpperCase() + category.slice(1).replace(/-/g, ' ');
+}
+
+// Generar HTML de una categoría
+function generateCategoryHTML(category, products) {
+    const categoryDisplayName = getCategoryDisplayName(category);
+    
+    let html = `
+        <section class="category-section" data-category="${category}">
+            <div class="category-header">
+                <h2 class="category-title">${categoryDisplayName}</h2>
+                <div class="category-divider"></div>
+            </div>
+            <div class="products-grid">
+    `;
+    
+    products.forEach((item, index) => {
+        html += generateProductCardHTML(item, index);
+    });
+    
+    html += `
+            </div>
+        </section>
+    `;
+    
+    return html;
+}
+
+// Generar HTML de una card de producto
+function generateProductCardHTML(item, index) {
+    const product = item.product;
+    const redirectUrl = item.redirectUrl || product.store_url;
+    const price = formatPrice(product.price, product.currency);
+    const hasPrice = product.price !== null && product.price !== undefined;
+    const isFavorite = favorites.includes(product.id.toString());
+    
+    return `
+        <div class="product-card" 
+             data-product-id="${product.id}" 
+             style="animation-delay: ${index * 0.1}s">
+            <div class="product-image-container">
+                <img src="${product.thumbnail}" 
+                     alt="${escapeHtml(product.name)}" 
+                     class="product-image" 
+                     loading="lazy"
+                     onerror="handleImageError(this)">
+                <div class="product-overlay">
+                    <div class="overlay-buttons">
+                        <button class="quick-view-btn" 
+                                onclick="quickViewProduct('${product.id}')" 
+                                title="Vista rápida"
+                                aria-label="Vista rápida de ${escapeHtml(product.name)}">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="favorite-btn ${isFavorite ? 'active' : ''}" 
+                                onclick="toggleFavorite('${product.id}')" 
+                                title="${isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}"
+                                aria-label="${isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}">
+                            <i class="${isFavorite ? 'fas' : 'far'} fa-heart"></i>
+                        </button>
+                    </div>
+                </div>
+                ${hasPrice ? `<div class="price-badge">${price}</div>` : ''}
+            </div>
             
-            // Close mobile menu when clicking outside
-            document.addEventListener('click', (e) => {
-                if (!hamburger.contains(e.target) && !navMenu.contains(e.target)) {
-                    closeMobileMenu();
-                }
-            });
-
-            // Close mobile menu when clicking on a link
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.addEventListener('click', closeMobileMenu);
-            });
-        }
-
-        // Contact form submission
-        const contactForm = document.getElementById('contactForm');
-        if (contactForm) {
-            contactForm.addEventListener('submit', handleContactForm);
-        }
-
-        // Navbar scroll effect
-        window.addEventListener('scroll', throttle(handleNavbarScroll, 16));
-
-        // Window resize handler
-        window.addEventListener('resize', throttle(handleWindowResize, 250));
-
-        // Product filter buttons
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', handleProductFilter);
-        });
-
-        // Keyboard navigation
-        document.addEventListener('keydown', handleKeyboardNavigation);
-
-        // Scroll indicator click
-        const scrollIndicator = document.querySelector('.scroll-indicator');
-        if (scrollIndicator) {
-            scrollIndicator.addEventListener('click', () => scrollToProducts());
-        }
-
-        console.log('✅ Event listeners setup complete');
-    } catch (error) {
-        console.error('❌ Event listeners setup error:', error);
-    }
+            <div class="product-info">
+                <h3 class="product-name" title="${escapeHtml(product.name)}">
+                    ${escapeHtml(product.name)}
+                </h3>
+                <div class="product-price-section">
+                    <span class="product-price ${hasPrice ? 'available' : 'unavailable'}">
+                        ${price}
+                    </span>
+                </div>
+                <button class="buy-button" 
+                        onclick="redirectToProduct('${redirectUrl}')"
+                        aria-label="Ver producto ${escapeHtml(product.name)}">
+                    <span>Ver Producto</span>
+                    <i class="fas fa-external-link-alt"></i>
+                </button>
+            </div>
+        </div>
+    `;
 }
 
-// Mobile Menu Functions
-function toggleMobileMenu() {
-    const hamburger = document.querySelector('.hamburger');
-    const navMenu = document.querySelector('.nav-menu');
-    
-    hamburger.classList.toggle('active');
-    navMenu.classList.toggle('active');
-    
-    // Prevent body scroll when menu is open
-    document.body.style.overflow = navMenu.classList.contains('active') ? 'hidden' : '';
-}
-
-function closeMobileMenu() {
-    const hamburger = document.querySelector('.hamburger');
-    const navMenu = document.querySelector('.nav-menu');
-    
-    hamburger.classList.remove('active');
-    navMenu.classList.remove('active');
-    document.body.style.overflow = '';
-}
-
-// Enhanced Slider Functions
-function showSlide(index) {
-    if (!slides.length) return;
-
-    // Remove active classes
-    slides.forEach(slide => slide.classList.remove('active'));
-    dots.forEach(dot => dot.classList.remove('active'));
-
-    // Add active class to current slide
-    if (slides[index]) {
-        slides[index].classList.add('active');
-        slides[index].style.opacity = '0';
-        setTimeout(() => {
-            slides[index].style.opacity = '1';
-        }, 50);
+// Formatear precio
+function formatPrice(price, currency = 'USD') {
+    if (price === null || price === undefined) {
+        return 'Consultar precio';
     }
     
-    if (dots[index]) {
-        dots[index].classList.add('active');
-    }
-
-    // Move slider
-    const slider = document.querySelector('.slider');
-    if (slider) {
-        slider.style.transform = `translateX(-${index * 100}%)`;
-    }
-
-    currentSlide = index;
-}
-
-function changeSlide(direction) {
-    const totalSlides = slides.length;
-    if (!totalSlides) return;
-    
-    let newIndex = currentSlide + direction;
-    if (newIndex >= totalSlides) newIndex = 0;
-    else if (newIndex < 0) newIndex = totalSlides - 1;
-    
-    showSlide(newIndex);
-}
-
-function currentSlideHandler(index) {
-    showSlide(index - 1);
-}
-
-// Global functions for HTML onclick handlers
-window.changeSlide = changeSlide;
-window.currentSlide = currentSlideHandler;
-
-function startSlideAutoplay() {
-    setInterval(() => {
-        if (!document.hidden) {
-            changeSlide(1);
-        }
-    }, CONFIG.SLIDE_INTERVAL);
-}
-
-// Enhanced Printful API Integration
-async function printfulApiCall(endpoint = '/', method = 'GET', body = null, retries = 0) {
-    const url = `${CONFIG.WORKER_BASE}${endpoint}`;
-    
-    const fetchOptions = {
-        method,
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        },
-        signal: AbortSignal.timeout(CONFIG.REQUEST_TIMEOUT)
-    };
-
-    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-        fetchOptions.body = JSON.stringify(body);
-    }
-
-    try {
-        showLoading(true);
-        
-        const response = await fetch(url, fetchOptions);
-        
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.status} ${response.statusText}`);
-        }
-
-        const contentType = response.headers.get('content-type') || '';
-        const data = contentType.includes('application/json') 
-            ? await response.json() 
-            : await response.text();
-
-        console.log('✅ Printful API Success:', { endpoint, method, data });
-        return data;
-
-    } catch (error) {
-        console.error('❌ Printful API Error:', { endpoint, method, error: error.message });
-        
-        // Retry logic
-        if (retries < CONFIG.RETRY_ATTEMPTS && !error.name === 'AbortError') {
-            console.log(`🔄 Retrying API call... Attempt ${retries + 1}`);
-            await new Promise(resolve => setTimeout(resolve, 1000 * (retries + 1)));
-            return printfulApiCall(endpoint, method, body, retries + 1);
-        }
-        
-        throw error;
-    } finally {
-        showLoading(false);
-    }
-}
-
-// Enhanced Product Store Redirection
-async function redirectToStore(category) {
-    console.log(`🛍️ Redirecting to ${category} store...`);
-    
-    try {
-        trackProductClick(category);
-        showLoading(true);
-
-        // Try to get products from Printful API
-        const data = await printfulApiCall(`/products?category=${encodeURIComponent(category)}`);
-
-        // Handle different response formats
-        if (data && typeof data === 'object') {
-            let redirectUrl = null;
-
-            // Check for direct redirect URL
-            if (data.redirectUrl) {
-                redirectUrl = data.redirectUrl;
-            }
-            // Check for store URL in response
-            else if (data.store_url) {
-                redirectUrl = data.store_url;
-            }
-            // Check if it's an array of products
-            else if (Array.isArray(data) && data.length > 0) {
-                const firstProduct = data[0];
-                redirectUrl = firstProduct.product_url || firstProduct.url || firstProduct.store_url;
-            }
-            // Check for result property (Printful API structure)
-            else if (data.result) {
-                if (Array.isArray(data.result) && data.result.length > 0) {
-                    redirectUrl = data.result[0].store_url || data.result[0].product_url;
-                } else if (data.result.store_url) {
-                    redirectUrl = data.result.store_url;
-                }
-            }
-
-            if (redirectUrl) {
-                console.log('🔗 Opening Printful store:', redirectUrl);
-                window.open(redirectUrl, '_blank', 'noopener,noreferrer');
-                showNotification(`Opening ${category} collection...`, 'success');
-                return;
-            }
-        }
-
-        // Fallback to local path
-        console.log('⚠️ No Printful URL found, using fallback');
-        const localPath = CONFIG.STORE_PATHS[category] || '/';
-        showNotification(`Browse our ${category} collection`, 'info');
-        window.location.href = localPath;
-
-    } catch (error) {
-        console.error('❌ Store redirect error:', error);
-        
-        // Always provide fallback
-        const localPath = CONFIG.STORE_PATHS[category] || '/';
-        showNotification('Opening product catalog...', 'info');
-        window.location.href = localPath;
-    } finally {
-        showLoading(false);
-    }
-}
-
-// Make redirectToStore globally available
-window.redirectToStore = redirectToStore;
-
-// Analytics and Tracking
-function trackProductClick(category) {
-    console.log(`📊 Product category clicked: ${category}`);
-    
-    // Google Analytics
-    if (typeof gtag !== 'undefined') {
-        gtag('event', 'product_click', {
-            'event_category': 'engagement',
-            'event_label': category,
-            'value': 1
-        });
-    }
-    
-    // Custom tracking
-    const event = {
-        type: 'product_click',
-        category: category,
-        timestamp: new Date().toISOString(),
-        user_agent: navigator.userAgent,
-        referrer: document.referrer
+    const currencySymbols = {
+        'USD': '$',
+        'EUR': '€',
+        'GBP': '£',
+        'MXN': '$',
+        'CAD': 'C$'
     };
     
-    // Store in localStorage for analytics
-    const analytics = JSON.parse(localStorage.getItem('dress_analytics')) || [];
-    analytics.push(event);
-    if (analytics.length > 100) analytics.shift(); // Keep only last 100 events
-    localStorage.setItem('dress_analytics', JSON.stringify(analytics));
+    const symbol = currencySymbols[currency] || currency;
+    return `${symbol}${parseFloat(price).toFixed(2)}`;
 }
 
-// Product Filter Functions
-function initializeProductFilters() {
-    const filterButtons = document.querySelectorAll('.filter-btn');
-    const productCards = document.querySelectorAll('.product-card');
-    
-    if (!filterButtons.length || !productCards.length) return;
-    
-    console.log('🎛️ Initializing product filters');
+// Escapar HTML para prevenir XSS
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
-function handleProductFilter(e) {
-    const filterValue = e.target.dataset.filter;
-    const filterButtons = document.querySelectorAll('.filter-btn');
-    const productCards = document.querySelectorAll('.product-card');
-    
-    // Update active filter button
-    filterButtons.forEach(btn => btn.classList.remove('active'));
-    e.target.classList.add('active');
-    
-    // Filter products with animation
-    productCards.forEach((card, index) => {
-        const cardFilter = card.dataset.filter;
-        const shouldShow = filterValue === 'all' || cardFilter === filterValue;
-        
-        setTimeout(() => {
-            if (shouldShow) {
-                card.style.display = 'block';
-                card.classList.add('fade-in');
-            } else {
-                card.style.display = 'none';
-                card.classList.remove('fade-in');
-            }
-        }, index * 50);
-    });
-    
-    console.log(`🎯 Filtered products by: ${filterValue}`);
+// Manejar error de imagen
+function handleImageError(img) {
+    img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%23f8f9fa"/><text x="50%" y="50%" font-family="Arial" font-size="16" fill="%236c757d" text-anchor="middle" dy=".3em">Imagen no disponible</text></svg>';
+    img.onerror = null; // Prevenir bucle infinito
 }
 
-// Quick View Function
-function quickView(category) {
-    console.log(`👁️ Quick view for: ${category}`);
-    showNotification(`Quick view for ${category} - Coming soon!`, 'info');
+// Cargar productos desde la API
+async function loadProducts(forceRefresh = false) {
+    const loadingEl = document.getElementById('products-loading');
+    const errorEl = document.getElementById('products-error');
+    const emptyEl = document.getElementById('products-empty');
+    const container = document.getElementById('products-container');
     
-    // TODO: Implement modal with product preview
-    // This would show a modal with product images and basic info
-}
-
-// Make quickView globally available
-window.quickView = quickView;
-
-// Favorites Functions
-function toggleFavorite(category) {
-    const index = favorites.indexOf(category);
-    
-    if (index > -1) {
-        favorites.splice(index, 1);
-        showNotification(`Removed ${category} from favorites`, 'info');
-    } else {
-        favorites.push(category);
-        showNotification(`Added ${category} to favorites`, 'success');
-    }
-    
-    localStorage.setItem('dress_favorites', JSON.stringify(favorites));
-    updateFavoritesDisplay();
-    
-    console.log('❤️ Favorites updated:', favorites);
-}
-
-// Make toggleFavorite globally available
-window.toggleFavorite = toggleFavorite;
-
-function updateFavoritesDisplay() {
-    document.querySelectorAll('.favorite-btn').forEach(btn => {
-        const category = btn.onclick.toString().match(/'([^']+)'/)?.[1];
-        if (category && favorites.includes(category)) {
-            btn.innerHTML = '<i class="fas fa-heart"></i>';
-            btn.style.color = 'var(--danger)';
-        } else {
-            btn.innerHTML = '<i class="far fa-heart"></i>';
-            btn.style.color = '';
-        }
-    });
-}
-
-// Cart Functions
-function openCart() {
-    console.log('🛒 Opening cart');
-    showNotification('Cart functionality coming soon!', 'info');
-    
-    // TODO: Implement cart modal/page
-}
-
-// Make openCart globally available
-window.openCart = openCart;
-
-function updateCartDisplay() {
-    const cartCount = document.querySelector('.cart-count');
-    if (cartCount) {
-        cartCount.textContent = cartItems.length;
-        cartCount.style.display = cartItems.length > 0 ? 'flex' : 'none';
-    }
-}
-
-// Theme Functions
-function initializeTheme() {
-    const savedTheme = localStorage.getItem('dress_theme') || 'light';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-}
-
-function toggleTheme() {
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-    
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('dress_theme', newTheme);
-    
-    showNotification(`Switched to ${newTheme} theme`, 'success');
-    console.log(`🌙 Theme changed to: ${newTheme}`);
-}
-
-// Make toggleTheme globally available
-window.toggleTheme = toggleTheme;
-
-// Lookbook Function
-function openLookbook() {
-    console.log('📸 Opening lookbook');
-    showNotification('Lookbook coming soon!', 'info');
-    
-    // TODO: Implement lookbook modal/page
-}
-
-// Make openLookbook globally available
-window.openLookbook = openLookbook;
-
-// Enhanced Smooth Scrolling
-function initializeSmoothScrolling() {
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function (e) {
-            e.preventDefault();
-            const target = document.querySelector(this.getAttribute('href'));
-            if (target) {
-                const offsetTop = target.offsetTop - 100;
-                window.scrollTo({ 
-                    top: offsetTop, 
-                    behavior: 'smooth' 
-                });
-                
-                // Update URL without triggering scroll
-                history.pushState(null, null, this.getAttribute('href'));
-            }
-        });
-    });
-}
-
-function scrollToProducts() {
-    const productsSection = document.getElementById('products');
-    if (productsSection) {
-        const offsetTop = productsSection.offsetTop - 100;
-        window.scrollTo({ 
-            top: offsetTop, 
-            behavior: 'smooth' 
-        });
-    }
-}
-
-// Make scrollToProducts globally available
-window.scrollToProducts = scrollToProducts;
-
-// Enhanced Contact Form Handler
-async function handleContactForm(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(e.target);
-    const data = {
-        name: formData.get('name')?.trim(),
-        email: formData.get('email')?.trim(),
-        subject: formData.get('subject')?.trim(),
-        message: formData.get('message')?.trim()
-    };
-
-    // Validation
-    if (!data.name || !data.email || !data.message) {
-        showNotification('Please fill in all required fields.', 'error');
+    // Verificar cache
+    if (!forceRefresh && productsCache.isValid()) {
+        const productsHTML = generateProductsHTML(productsCache.data);
+        container.innerHTML = productsHTML;
+        setupProductAnimations();
         return;
     }
     
-    if (!isValidEmail(data.email)) {
-        showNotification('Please enter a valid email address.', 'error');
-        return;
-    }
+    // Mostrar loading
+    showLoadingState();
     
-    if (data.message.length < 10) {
-        showNotification('Please provide a more detailed message.', 'error');
-        return;
-    }
-
-    const submitBtn = e.target.querySelector('.submit-btn');
-    const originalText = submitBtn?.textContent || 'Send Message';
-    
-    try {
-        if (submitBtn) {
-            submitBtn.textContent = 'Sending...';
-            submitBtn.disabled = true;
-        }
-
-        // Try to send via API
+    let attempts = 0;
+    while (attempts < DRESS_CONFIG.RETRY_ATTEMPTS) {
         try {
-            await printfulApiCall('/contact', 'POST', data);
-            showNotification('Thank you! We\'ll get back to you within 24 hours.', 'success');
-        } catch (apiError) {
-            // Fallback to mailto
-            const mailtoLink = `mailto:liendoalejandro94@gmail.com?subject=${encodeURIComponent(data.subject || 'Contact from DRESS website')}&body=${encodeURIComponent(`Name: ${data.name}\nEmail: ${data.email}\n\nMessage:\n${data.message}`)}`;
-            window.location.href = mailtoLink;
-            showNotification('Opening email client...', 'info');
-        }
-        
-        e.target.reset();
-        
-    } catch (error) {
-        console.error('❌ Contact form error:', error);
-        showNotification('Failed to send message. Please try again.', 'error');
-    } finally {
-        if (submitBtn) {
-            submitBtn.textContent = originalText;
-            submitBtn.disabled = false;
-        }
-    }
-}
-
-// Utility Functions
-function isValidEmail(email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-}
-
-function throttle(func, limit) {
-    let inThrottle;
-    return function() {
-        const args = arguments;
-        const context = this;
-        if (!inThrottle) {
-            func.apply(context, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
-        }
-    }
-}
-
-function debounce(func, delay) {
-    let timeoutId;
-    return function (...args) {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => func.apply(this, args), delay);
-    };
-}
-
-// Enhanced Notification System
-function showNotification(message, type = 'info', duration = 5000) {
-    // Remove existing notifications
-    document.querySelectorAll('.notification').forEach(n => n.remove());
-    
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    
-    const icons = {
-        success: 'fas fa-check-circle',
-        error: 'fas fa-exclamation-circle', 
-        warning: 'fas fa-exclamation-triangle',
-        info: 'fas fa-info-circle'
-    };
-    
-    notification.innerHTML = `
-        <i class="${icons[type] || icons.info}"></i>
-        <span>${message}</span>
-        <button class="notification-close" onclick="this.parentElement.remove()">
-            <i class="fas fa-times"></i>
-        </button>
-    `;
-
-    const colors = {
-        success: '#4CAF50',
-        error: '#f44336', 
-        warning: '#ff9800',
-        info: '#2196F3'
-    };
-
-    notification.style.cssText = `
-        position: fixed;
-        top: 100px;
-        right: 20px;
-        background: ${colors[type] || colors.info};
-        color: white;
-        padding: 1rem 1.5rem;
-        border-radius: 10px;
-        z-index: 10000;
-        font-weight: 500;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-        transform: translateX(400px);
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        max-width: 400px;
-        word-wrap: break-word;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        backdrop-filter: blur(10px);
-    `;
-
-    notification.querySelector('.notification-close').style.cssText = `
-        background: none;
-        border: none;
-        color: white;
-        cursor: pointer;
-        margin-left: auto;
-        padding: 0.2rem;
-        border-radius: 50%;
-        transition: background 0.3s ease;
-    `;
-
-    document.body.appendChild(notification);
-    
-    // Animate in
-    setTimeout(() => notification.style.transform = 'translateX(0)', 100);
-    
-    // Auto remove
-    setTimeout(() => {
-        notification.style.transform = 'translateX(400px)';
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
+            const response = await fetchWithTimeout(DRESS_CONFIG.API_ENDPOINT, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            }, 10000);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-        }, 300);
-    }, duration);
-}
-
-// Enhanced Loading System
-function showLoading(show) {
-    const overlay = document.getElementById('loadingOverlay');
-    if (!overlay) return;
-    
-    if (show) {
-        overlay.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
-    } else {
-        overlay.classList.add('hidden');
-        document.body.style.overflow = '';
-    }
-}
-
-// Navbar Scroll Effect
-function handleNavbarScroll() {
-    const navbar = document.querySelector('.navbar');
-    if (!navbar) return;
-    
-    const scrolled = window.scrollY > 50;
-    navbar.classList.toggle('scrolled', scrolled);
-}
-
-// Window Resize Handler
-function handleWindowResize() {
-    const hamburger = document.querySelector('.hamburger');
-    const navMenu = document.querySelector('.nav-menu');
-    
-    if (window.innerWidth > 768) {
-        closeMobileMenu();
-    }
-    
-    // Recalculate slider position
-    if (slides.length > 0) {
-        const slider = document.querySelector('.slider');
-        if (slider) {
-            slider.style.transform = `translateX(-${currentSlide * 100}%)`;
+            
+            const products = await response.json();
+            
+            // Validar estructura de datos
+            if (!Array.isArray(products)) {
+                throw new Error('Invalid data format received');
+            }
+            
+            // Guardar en cache
+            productsCache.set(products);
+            
+            // Ocultar loading
+            hideLoadingState();
+            
+            // Generar y mostrar productos
+            const productsHTML = generateProductsHTML(products);
+            container.innerHTML = productsHTML;
+            
+            // Configurar animaciones
+            setupProductAnimations();
+            
+            console.log('✅ Productos cargados exitosamente:', products.length);
+            
+            // Disparar evento personalizado
+            document.dispatchEvent(new CustomEvent('productsLoaded', {
+                detail: { products, count: products.length }
+            }));
+            
+            return;
+            
+        } catch (error) {
+            attempts++;
+            console.error(`❌ Intento ${attempts} fallido:`, error);
+            
+            if (attempts < DRESS_CONFIG.RETRY_ATTEMPTS) {
+                console.log(`⏳ Reintentando en ${DRESS_CONFIG.RETRY_DELAY}ms...`);
+                await new Promise(resolve => setTimeout(resolve, DRESS_CONFIG.RETRY_DELAY));
+            } else {
+                hideLoadingState();
+                showErrorState();
+                console.error('❌ Error final al cargar productos:', error);
+            }
         }
     }
 }
 
-// Keyboard Navigation
-function handleKeyboardNavigation(e) {
-    // ESC key - close modals/menus
-    if (e.key === 'Escape') {
-        closeMobileMenu();
-        // TODO: Close any open modals
-    }
-    
-    // Arrow keys for slider
-    if (e.key === 'ArrowLeft') {
-        changeSlide(-1);
-    } else if (e.key === 'ArrowRight') {
-        changeSlide(1);
-    }
+// Fetch con timeout
+function fetchWithTimeout(url, options, timeout) {
+    return Promise.race([
+        fetch(url, options),
+        new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Request timeout')), timeout)
+        )
+    ]);
 }
 
-// Enhanced Intersection Observer
-function setupIntersectionObserver() {
-    const observerOptions = { 
-        threshold: CONFIG.INTERSECTION_THRESHOLD, 
-        rootMargin: '0px 0px -50px 0px' 
-    };
-    
+// Estados de UI
+function showLoadingState() {
+    document.getElementById('products-loading').style.display = 'block';
+    document.getElementById('products-error').style.display = 'none';
+    document.getElementById('products-empty').style.display = 'none';
+}
+
+function hideLoadingState() {
+    document.getElementById('products-loading').style.display = 'none';
+}
+
+function showErrorState() {
+    document.getElementById('products-error').style.display = 'block';
+    document.getElementById('products-empty').style.display = 'none';
+}
+
+function showEmptyState() {
+    document.getElementById('products-empty').style.display = 'block';
+    document.getElementById('products-error').style.display = 'none';
+}
+
+// Configurar animaciones de productos
+function setupProductAnimations() {
+    const cards = document.querySelectorAll('.product-card');
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
-                entry.target.classList.add('fade-in');
-                observer.unobserve(entry.target);
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
             }
         });
-    }, observerOptions);
-
-    // Observe elements for animations
-    document.querySelectorAll('.product-card, .slide, .section-title, .contact-card, .terms-item').forEach(el => {
-        observer.observe(el);
-    });
-}
-
-// Animation Initialization
-function initializeAnimations() {
-    // Add staggered animations to product cards
-    document.querySelectorAll('.product-card').forEach((card, index) => {
-        card.style.animationDelay = `${index * 0.1}s`;
-    });
+    }, { threshold: 0.1 });
     
-    // Add scroll-triggered animations
-    const scrollElements = document.querySelectorAll('.hero-stats .stat-item');
-    scrollElements.forEach((el, index) => {
-        el.style.animationDelay = `${index * 0.2}s`;
+    cards.forEach(card => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(card);
     });
 }
 
-// Load User Preferences
-function loadUserPreferences() {
-    // Load favorites
-    const savedFavorites = localStorage.getItem('dress_favorites');
-    if (savedFavorites) {
-        favorites = JSON.parse(savedFavorites);
-        updateFavoritesDisplay();
+// Funciones de interacción
+function redirectToProduct(url) {
+    if (url) {
+        // Tracking opcional
+        gtag && gtag('event', 'product_click', {
+            'event_category': 'engagement',
+            'event_label': url
+        });
+        
+        window.open(url, '_blank', 'noopener,noreferrer');
     }
-    
-    // Load cart items
-    const savedCart = localStorage.getItem('dress_cart');
-    if (savedCart) {
-        cartItems = JSON.parse(savedCart);
-        updateCartDisplay();
-    }
-    
-    console.log('✅ User preferences loaded');
 }
 
-// Page Visibility API
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-        console.log('🔒 Page hidden - pausing animations');
+function quickViewProduct(productId) {
+    console.log('👁️ Vista rápida del producto:', productId);
+    
+    // Buscar producto en cache
+    if (productsCache.data) {
+        const product = productsCache.data.find(item => 
+            item.product.id.toString() === productId.toString()
+        );
+        
+        if (product) {
+            showQuickViewModal(product);
+        }
+    }
+}
+
+function toggleFavorite(productId) {
+    const id = productId.toString();
+    const index = favorites.indexOf(id);
+    const button = document.querySelector(`[data-product-id="${productId}"] .favorite-btn`);
+    
+    if (index > -1) {
+        // Quitar de favoritos
+        favorites.splice(index, 1);
+        button.classList.remove('active');
+        button.querySelector('i').className = 'far fa-heart';
+        button.title = 'Agregar a favoritos';
+        showNotification('Producto quitado de favoritos', 'info');
     } else {
-        console.log('👁️ Page visible - resuming animations');
+        // Agregar a favoritos
+        favorites.push(id);
+        button.classList.add('active');
+        button.querySelector('i').className = 'fas fa-heart';
+        button.title = 'Quitar de favoritos';
+        showNotification('Producto agregado a favoritos', 'success');
     }
-});
-
-// Error Handling
-window.addEventListener('error', (e) => {
-    console.error('❌ Global error:', e.error);
     
-    // Don't show error notifications for network errors
-    if (!e.error?.message?.includes('fetch')) {
-        showNotification('Something went wrong. Please refresh the page.', 'error');
-    }
-});
-
-// Performance Monitoring
-if ('performance' in window) {
-    window.addEventListener('load', () => {
-        setTimeout(() => {
-            const perfData = performance.getEntriesByType('navigation')[0];
-            console.log('📊 Page Performance:', {
-                loadTime: Math.round(perfData.loadEventEnd - perfData.fetchStart),
-                domReady: Math.round(perfData.domContentLoadedEventEnd - perfData.fetchStart),
-                firstPaint: Math.round(performance.getEntriesByType('paint')[0]?.startTime || 0)
-            });
-        }, 0);
+    // Guardar en localStorage
+    localStorage.setItem('dress_favorites', JSON.stringify(favorites));
+    
+    // Tracking opcional
+    gtag && gtag('event', 'favorite_toggle', {
+        'event_category': 'engagement',
+        'event_label': productId,
+        'value': index > -1 ? 0 : 1
     });
 }
 
-// Export for testing environments
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        showSlide,
-        changeSlide,
-        redirectToStore,
-        printfulApiCall,
-        showNotification,
-        toggleFavorite,
-        CONFIG
-    };
+// Modal de vista rápida (placeholder)
+function showQuickViewModal(product) {
+    // Implementar modal aquí
+    console.log('Modal de vista rápida para:', product.product.name);
 }
 
-// Debug information
-console.log('🎨 DRESS Website - Enhanced Script loaded successfully');
-console.log('🔧 Configuration:', CONFIG);
-console.log('🌐 Environment:', { 
-    userAgent: navigator.userAgent, 
-    viewport: { width: window.innerWidth, height: window.innerHeight }, 
-    timestamp: new Date().toISOString(),
-    localStorage: typeof(Storage) !== "undefined",
-    serviceWorker: 'serviceWorker' in navigator
+// Mostrar notificaciones
+function showNotification(message, type = 'info') {
+    // Crear elemento de notificación
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'times' : 'info'}"></i>
+        <span>${message}</span>
+    `;
+    
+    // Añadir al DOM
+    document.body.appendChild(notification);
+    
+    // Mostrar con animación
+    setTimeout(() => notification.classList.add('show'), 100);
+    
+    // Quitar después de 3 segundos
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// Filtros de productos
+function setupProductFilters() {
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    
+    filterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const filter = button.dataset.filter;
+            
+            // Actualizar botones activos
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            
+            // Filtrar productos
+            filterProducts(filter);
+        });
+    });
+}
+
+function filterProducts(filter) {
+    const categories = document.querySelectorAll('.category-section');
+    
+    categories.forEach(category => {
+        if (filter === 'all') {
+            category.style.display = 'block';
+        } else {
+            const categoryName = category.dataset.category;
+            category.style.display = categoryName === filter ? 'block' : 'none';
+        }
+    });
+}
+
+// Inicialización cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🎨 Inicializando sistema de productos dinámicos...');
+    
+    // Configurar filtros
+    setupProductFilters();
+    
+    // Cargar productos con delay para mostrar loading
+    setTimeout(() => {
+        loadProducts();
+    }, 500);
+    
+    // Listener para recargar productos
+    window.reloadProducts = () => loadProducts(true);
+    
+    console.log('✅ Sistema de productos dinámicos inicializado');
 });
+
+// Exportar funciones globales
+window.loadProducts = loadProducts;
+window.redirectToProduct = redirectToProduct;
+window.quickViewProduct = quickViewProduct;
+window.toggleFavorite = toggleFavorite;
