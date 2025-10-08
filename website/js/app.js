@@ -308,7 +308,7 @@ function groupProductsByCategory(products) {
     const grouped = {};
     
     products.forEach((item, index) => {
-        // Handle different data structures
+        // Handle the actual API structure from Printful
         const product = item.product || item;
         const category = normalizeCategory(product.category) || 'other';
         
@@ -316,18 +316,23 @@ function groupProductsByCategory(products) {
             grouped[category] = [];
         }
         
-        // Normalize product structure
+        // Extract pricing from variants
+        const priceInfo = extractPriceInfo(product.variants || []);
+        
+        // Normalize product structure for the real API response
         const normalizedProduct = {
             id: product.id || `product_${index}`,
             name: product.name || 'Producto sin nombre',
-            thumbnail: product.thumbnail || product.thumbnail_url || product.image_url || getPlaceholderImage(),
-            store_url: product.store_url || product.product_url || '#',
-            price: product.price || product.retail_price,
-            currency: product.currency || 'USD',
+            thumbnail: product.thumbnail || getPlaceholderImage(),
+            store_url: item.redirectUrl || product.store_url || '#',
+            price: priceInfo.price,
+            priceRange: priceInfo.range,
+            currency: priceInfo.currency,
             category: category,
             variants: product.variants || [],
-            colors: extractColors(product.variants || []),
-            sizes: extractSizes(product.variants || [])
+            colors: extractColorsFromVariants(product.variants || []),
+            sizes: extractSizesFromVariants(product.variants || []),
+            variantCount: (product.variants || []).length
         };
         
         grouped[category].push(normalizedProduct);
@@ -365,31 +370,95 @@ function normalizeCategory(category) {
     return categoryMap[normalized] || 'other';
 }
 
-function extractColors(variants) {
+function extractColorsFromVariants(variants) {
     const colors = new Set();
     
     variants.forEach(variant => {
-        if (variant.color) {
-            colors.add(variant.color);
+        // Extract color from variant name (e.g., "Product Name / Black / M")
+        const nameParts = variant.name ? variant.name.split(' / ') : [];
+        if (nameParts.length >= 2) {
+            const colorPart = nameParts[1].trim();
+            if (colorPart) {
+                colors.add(colorPart);
+            }
         }
-        if (variant.color_code) {
-            colors.add(variant.color_code);
+        
+        // Also check SKU for color info
+        if (variant.sku) {
+            const skuParts = variant.sku.split('_');
+            if (skuParts.length > 1) {
+                const colorSize = skuParts[1];
+                const colorMatch = colorSize.match(/^([^-]+)/);
+                if (colorMatch) {
+                    colors.add(colorMatch[1]);
+                }
+            }
         }
     });
     
     return Array.from(colors);
 }
 
-function extractSizes(variants) {
+function extractSizesFromVariants(variants) {
     const sizes = new Set();
     
     variants.forEach(variant => {
-        if (variant.size) {
-            sizes.add(variant.size);
+        // Extract size from variant name (e.g., "Product Name / Black / M")
+        const nameParts = variant.name ? variant.name.split(' / ') : [];
+        if (nameParts.length >= 3) {
+            const sizePart = nameParts[2].trim();
+            if (sizePart) {
+                sizes.add(sizePart);
+            }
+        }
+        
+        // Also check SKU for size info
+        if (variant.sku) {
+            const skuParts = variant.sku.split('_');
+            if (skuParts.length > 1) {
+                const colorSize = skuParts[1];
+                const sizeMatch = colorSize.match(/-(.+)$/);
+                if (sizeMatch) {
+                    sizes.add(sizeMatch[1]);
+                }
+            }
         }
     });
     
     return Array.from(sizes);
+}
+
+function extractPriceInfo(variants) {
+    if (!variants || variants.length === 0) {
+        return { price: null, range: null, currency: 'USD' };
+    }
+    
+    const prices = variants
+        .map(v => parseFloat(v.retail_price))
+        .filter(p => !isNaN(p))
+        .sort((a, b) => a - b);
+    
+    if (prices.length === 0) {
+        return { price: null, range: null, currency: variants[0]?.currency || 'USD' };
+    }
+    
+    const minPrice = prices[0];
+    const maxPrice = prices[prices.length - 1];
+    const currency = variants[0]?.currency || 'USD';
+    
+    if (minPrice === maxPrice) {
+        return { 
+            price: minPrice, 
+            range: null, 
+            currency 
+        };
+    } else {
+        return { 
+            price: minPrice, 
+            range: `${minPrice} - ${maxPrice}`, 
+            currency 
+        };
+    }
 }
 
 function generateCategoryHTML(category, products) {
@@ -414,8 +483,12 @@ function generateCategoryHTML(category, products) {
 }
 
 function generateProductCardHTML(product, index) {
-    const price = formatPrice(product.price, product.currency);
+    const price = product.priceRange ? 
+        `${formatPrice(product.price, product.currency)} - ${formatPrice(parseFloat(product.priceRange.split(' - ')[1]), product.currency)}` :
+        formatPrice(product.price, product.currency);
+    
     const hasVariants = product.colors.length > 0 || product.sizes.length > 0;
+    const variantText = product.variantCount > 1 ? `${product.variantCount} variantes` : '';
     
     return `
         <div class="product-card" 
@@ -439,6 +512,8 @@ function generateProductCardHTML(product, index) {
                         </button>
                     </div>
                 </div>
+                
+                ${variantText ? `<div class="variant-badge">${variantText}</div>` : ''}
             </div>
             
             <div class="product-info">
@@ -592,7 +667,117 @@ function redirectToProduct(url, productName) {
 }
 
 function quickViewProduct(productId) {
-    showNotification('Vista rápida próximamente disponible', 'info');
+    // Find product in current data
+    if (!state.products) {
+        showNotification('Producto no encontrado', 'warning');
+        return;
+    }
+    
+    let foundProduct = null;
+    
+    // Search through products array
+    for (const item of state.products) {
+        const product = item.product || item;
+        if (String(product.id) === String(productId)) {
+            foundProduct = product;
+            break;
+        }
+    }
+    
+    if (foundProduct) {
+        showProductModal(foundProduct);
+    } else {
+        showNotification('Producto no encontrado', 'warning');
+    }
+}
+
+function showProductModal(product) {
+    // Create modal HTML
+    const modalHTML = `
+        <div class="product-modal-overlay" onclick="closeProductModal()">
+            <div class="product-modal" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2>${escapeHtml(product.name)}</h2>
+                    <button class="modal-close" onclick="closeProductModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-content">
+                    <div class="modal-image">
+                        <img src="${product.thumbnail}" alt="${escapeHtml(product.name)}">
+                    </div>
+                    <div class="modal-info">
+                        <h3>Variantes Disponibles:</h3>
+                        <div class="modal-variants">
+                            ${generateModalVariantsHTML(product.variants || [])}
+                        </div>
+                        <div class="modal-actions">
+                            <button class="cta-button primary" onclick="redirectToProduct('${product.store_url || '#'}', '${escapeHtml(product.name)}')">
+                                <span>Ver en Tienda</span>
+                                <i class="fas fa-external-link-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add modal to page
+    const modalElement = document.createElement('div');
+    modalElement.innerHTML = modalHTML;
+    document.body.appendChild(modalElement);
+    
+    // Add show class for animation
+    setTimeout(() => {
+        modalElement.querySelector('.product-modal-overlay').classList.add('show');
+    }, 10);
+}
+
+function generateModalVariantsHTML(variants) {
+    if (!variants || variants.length === 0) {
+        return '<p>No hay variantes disponibles</p>';
+    }
+    
+    let html = '<div class="variants-list">';
+    
+    variants.forEach(variant => {
+        const nameParts = variant.name ? variant.name.split(' / ') : [];
+        const color = nameParts.length >= 2 ? nameParts[1] : 'Color no especificado';
+        const size = nameParts.length >= 3 ? nameParts[2] : 'Talla no especificada';
+        const price = formatPrice(variant.retail_price, variant.currency);
+        
+        html += `
+            <div class="variant-item">
+                <div class="variant-image">
+                    <img src="${variant.product?.image || product.thumbnail}" 
+                         alt="${escapeHtml(variant.name)}" 
+                         loading="lazy">
+                </div>
+                <div class="variant-details">
+                    <div class="variant-name">
+                        <span class="variant-color">${color}</span>
+                        <span class="variant-size">${size}</span>
+                    </div>
+                    <div class="variant-price">${price}</div>
+                    <div class="variant-sku">SKU: ${variant.sku}</div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    return html;
+}
+
+function closeProductModal() {
+    const modal = document.querySelector('.product-modal-overlay');
+    if (modal) {
+        modal.classList.remove('show');
+        setTimeout(() => {
+            modal.parentElement.remove();
+        }, 300);
+    }
 }
 
 function selectVariant(type, value, productId) {
@@ -809,6 +994,7 @@ window.selectVariant = selectVariant;
 window.loadMoreProducts = loadMoreProducts;
 window.loadProducts = loadProducts;
 window.toggleTheme = toggleTheme;
+window.closeProductModal = closeProductModal;
 window.handleImageError = handleImageError;
 
 console.log('📱 DRESS Website JavaScript loaded successfully');
