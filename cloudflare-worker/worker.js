@@ -1,227 +1,206 @@
-// Enhanced Cloudflare Worker for DRESS Website
-// Handles Printful API integration, CORS, and other backend services
+// worker.js — DRESS Cloudflare Worker (ESM-compatible)
+// Expects PRINTFUL_API_KEY as a secret (env.PRINTFUL_API_KEY)
 
-addEventListener('fetch', event => {
-  event.respondWith(handleRequest(event.request));
-});
-
-// Configuration
 const CONFIG = {
   PRINTFUL_API_BASE: 'https://api.printful.com',
   ALLOWED_ORIGINS: [
-    'https://dress-custom-apparel.pages.dev', // Replace with your Pages domain
-    'https://dress.example.com', // Replace with your custom domain
-    'http://localhost:3000', // For local development
+    'https://newdress-cgz.pages.dev',    // your Pages domain
+    'https://dress-custom-apparel.pages.dev',
+    'https://dress.example.com',
+    'http://localhost:3000',
     'http://127.0.0.1:3000'
   ],
-  CACHE_TTL: 300, // 5 minutes cache for product data
+  CACHE_TTL: 300, // seconds
   RATE_LIMIT: {
     MAX_REQUESTS: 100,
-    WINDOW: 60000 // 1 minute
+    WINDOW: 60_000 // 1 minute in ms
   }
 };
 
-// In-memory rate limiting (resets on worker restart)
+// In-memory stores (per-worker-instance)
 const rateLimitStore = new Map();
+const cache = new Map();
 
-async function handleRequest(request) {
-  const url = new URL(request.url);
-  
-  // Handle CORS preflight
-  if (request.method === 'OPTIONS') {
-    return handleCORS(request);
+export default {
+  async fetch(request, env, ctx) {
+    try {
+      const url = new URL(request.url);
+
+      // Preflight CORS
+      if (request.method === 'OPTIONS') {
+        return handleCORS(request);
+      }
+
+      // Health check
+      if (url.pathname === '/api/health' || url.pathname === '/health') {
+        return handleHealthCheck(request, env);
+      }
+
+      // Rate limiting
+      const rateLimitResult = checkRateLimit(request);
+      if (!rateLimitResult.allowed) {
+        return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
+          status: 429,
+          headers: jsonCORSHeaders(request)
+        });
+      }
+
+      // API routing
+      if (url.pathname.startsWith('/api/')) {
+        return await handleAPI(request, url, env);
+      }
+
+      // Default: let Pages/static origin handle it
+      return fetch(request);
+    } catch (err) {
+      return handleError(err, request);
+    }
   }
+};
 
-  // Check rate limiting
-  const rateLimitResult = checkRateLimit(request);
-  if (!rateLimitResult.allowed) {
-    return new Response('Rate limit exceeded', { 
-      status: 429,
-      headers: getCORSHeaders(request)
-    });
-  }
-
-  // Route API requests
-  if (url.pathname.startsWith('/api/')) {
-    return handleAPI(request, url);
-  }
-
-  // Default: serve static files (handled by Pages)
-  return fetch(request);
-}
-
-async function handleAPI(request, url) {
+// ---------- Routing & handlers ----------
+async function handleAPI(request, url, env) {
   try {
     if (url.pathname.startsWith('/api/printful')) {
-      return await handlePrintfulAPI(request, url);
+      return await handlePrintfulAPI(request, url, env);
     } else if (url.pathname.startsWith('/api/contact')) {
       return await handleContactForm(request);
     } else if (url.pathname.startsWith('/api/analytics')) {
       return await handleAnalytics(request);
     } else {
-      return new Response('API endpoint not found', { 
+      return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
         status: 404,
-        headers: getCORSHeaders(request)
+        headers: jsonCORSHeaders(request)
       });
     }
   } catch (error) {
     console.error('API Error:', error);
     return new Response(JSON.stringify({
       error: 'Internal server error',
-      message: error.message
-    }), { 
+      message: error?.message || String(error)
+    }), {
       status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        ...getCORSHeaders(request)
-      }
+      headers: jsonCORSHeaders(request)
     });
   }
 }
 
-// Enhanced Printful API Handler
-async function handlePrintfulAPI(request, url) {
-  // Check for API key
-  const printfulApiKey = PRINTFUL_API_KEY;
+// ---------- Printful proxy & processing ----------
+async function handlePrintfulAPI(request, url, env) {
+  const printfulApiKey = env?.PRINTFUL_API_KEY;
   if (!printfulApiKey) {
     return new Response(JSON.stringify({
       error: 'Printful API key not configured',
       code: 'MISSING_API_KEY'
-    }), { 
+    }), {
       status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        ...getCORSHeaders(request)
-      }
+      headers: jsonCORSHeaders(request)
     });
   }
 
-  // Parse the endpoint
+  // Build target endpoint and query
   let endpoint = url.pathname.replace('/api/printful', '') || '/';
-  const queryString = url.search;
-
-  // Map frontend-friendly endpoints to Printful API endpoints
   endpoint = mapPrintfulEndpoint(endpoint, url.searchParams);
-
-  // Build target URL
+  const queryString = url.search || '';
   const targetUrl = `${CONFIG.PRINTFUL_API_BASE}${endpoint}${queryString}`;
 
-  // Prepare headers for Printful API
+  // Prepare headers
   const headers = {
     'Authorization': `Bearer ${printfulApiKey}`,
-    'Accept': 'application/json',
-    'User-Agent': 'DRESS-Website/1.0'
+    'Accept': 'application/json'
   };
 
-  // Handle request body for POST/PUT requests
+  // Attach body for non-GET
   let body = null;
   if (['POST', 'PUT', 'PATCH'].includes(request.method)) {
     const contentType = request.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
+      // forward JSON body as-is
       body = await request.text();
       headers['Content-Type'] = 'application/json';
+    } else {
+      // for other content types, forward the raw body
+      body = await request.arrayBuffer();
     }
   }
 
-  try {
-    // Check cache for GET requests
-    const cacheKey = `printful:${request.method}:${targetUrl}`;
-    if (request.method === 'GET') {
-      const cached = await getCache(cacheKey);
-      if (cached) {
-        console.log('Cache hit for:', targetUrl);
-        return new Response(cached, {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Cache': 'HIT',
-            ...getCORSHeaders(request)
-          }
-        });
-      }
+  // Cache logic for GET
+  const cacheKey = `printful:${request.method}:${targetUrl}`;
+  if (request.method === 'GET') {
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return new Response(cached, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Cache': 'HIT',
+          ...corsHeadersForRequest(request)
+        }
+      });
     }
+  }
 
-    // Make request to Printful API
-    const response = await fetch(targetUrl, {
+  // Fetch from Printful
+  try {
+    const resp = await fetch(targetUrl, {
       method: request.method,
       headers,
       body
     });
 
-    const responseText = await response.text();
-    let responseData;
-
+    const text = await resp.text();
+    let data;
     try {
-      responseData = JSON.parse(responseText);
+      data = JSON.parse(text);
     } catch {
-      responseData = { data: responseText };
+      data = { raw: text };
     }
 
-    // Handle Printful API errors
-    if (!response.ok) {
-      console.error('Printful API Error:', {
-        status: response.status,
-        url: targetUrl,
-        response: responseData
-      });
-
+    if (!resp.ok) {
       return new Response(JSON.stringify({
         error: 'Printful API error',
-        status: response.status,
-        message: responseData.error || responseData.result || 'Unknown error',
-        details: responseData
+        status: resp.status,
+        details: data
       }), {
-        status: response.status,
+        status: resp.status,
         headers: {
           'Content-Type': 'application/json',
-          ...getCORSHeaders(request)
+          ...corsHeadersForRequest(request)
         }
       });
     }
 
-    // Process successful response
-    const processedData = processPrintfulResponse(responseData, endpoint, url.searchParams);
+    const processed = processPrintfulResponse(data, endpoint, url.searchParams);
 
-    // Cache successful GET responses
-    if (request.method === 'GET' && response.ok) {
-      await setCache(cacheKey, JSON.stringify(processedData), CONFIG.CACHE_TTL);
+    // cache GET successful responses
+    if (request.method === 'GET') {
+      await setCache(cacheKey, JSON.stringify(processed), CONFIG.CACHE_TTL);
     }
 
-    return new Response(JSON.stringify(processedData), {
-      status: response.status,
+    return new Response(JSON.stringify(processed), {
+      status: 200,
       headers: {
         'Content-Type': 'application/json',
         'X-Cache': 'MISS',
-        ...getCORSHeaders(request)
+        ...corsHeadersForRequest(request)
       }
     });
-
-  } catch (error) {
-    console.error('Printful request failed:', error);
-    
+  } catch (err) {
+    console.error('Printful request failed:', err);
     return new Response(JSON.stringify({
       error: 'Failed to connect to Printful',
-      message: error.message,
-      code: 'CONNECTION_ERROR'
+      message: err?.message || String(err)
     }), {
       status: 503,
-      headers: {
-        'Content-Type': 'application/json',
-        ...getCORSHeaders(request)
-      }
+      headers: jsonCORSHeaders(request)
     });
   }
 }
 
-// Map frontend endpoints to Printful API endpoints
+// ---------- Helpers to map / process Printful data ----------
 function mapPrintfulEndpoint(endpoint, searchParams) {
   const category = searchParams.get('category');
-  
-  // Map product categories to Printful sync products
-  if (endpoint === '/products' && category) {
-    return '/sync/products';
-  }
-  
-  // Map specific product endpoints
+
   const endpointMap = {
     '/products': '/sync/products',
     '/store': '/store',
@@ -232,58 +211,49 @@ function mapPrintfulEndpoint(endpoint, searchParams) {
     '/shipping': '/shipping/rates'
   };
 
+  // If /products + category, map to sync/products
+  if (endpoint === '/products' && category) return '/sync/products';
   return endpointMap[endpoint] || endpoint;
 }
 
-// Process Printful API responses for frontend consumption
 function processPrintfulResponse(data, endpoint, searchParams) {
   const category = searchParams.get('category');
 
-  // Handle sync products response
-  if (endpoint.includes('/sync/products') && data.result) {
-    const products = Array.isArray(data.result) ? data.result : [data.result];
-    
-    // Filter by category if specified
-    let filteredProducts = products;
+  // sync products format
+  if ((endpoint.includes('/sync/products') || endpoint.includes('/sync/products/')) && data.result) {
+    const productsArray = Array.isArray(data.result) ? data.result : data.result.resources ? data.result.resources : data.result;
+    const products = Array.isArray(productsArray) ? productsArray : [productsArray];
+
+    let filtered = products;
     if (category) {
-      filteredProducts = products.filter(product => {
-        const productName = product.name?.toLowerCase() || '';
-        const productTags = product.tags?.join(' ').toLowerCase() || '';
-        return productName.includes(category.toLowerCase()) || 
-               productTags.includes(category.toLowerCase());
+      filtered = products.filter(p => {
+        const name = (p.name || '').toLowerCase();
+        const tags = (p.tags || []).join(' ').toLowerCase();
+        return name.includes(category.toLowerCase()) || tags.includes(category.toLowerCase());
       });
     }
 
-    // Transform products for frontend
-    const transformedProducts = filteredProducts.map(product => ({
+    const transformed = filtered.map(product => ({
       id: product.id,
       name: product.name,
-      thumbnail: product.thumbnail_url,
-      store_url: product.store_url || generateStoreUrl(product, category),
-      product_url: product.store_url,
-      price: product.retail_price || product.price,
+      thumbnail: product.thumbnail_url || product.image_url || null,
+      store_url: product.store_url || generateStoreUrl(product),
+      product_url: product.store_url || null,
+      price: product.retail_price || product.price || null,
       currency: product.currency || 'USD',
       tags: product.tags || [],
       category: inferCategory(product.name),
       status: product.status
     }));
 
-    // Return first product URL for direct redirects, or all products for listing
-    if (transformedProducts.length === 1) {
-      return {
-        redirectUrl: transformedProducts[0].store_url,
-        product: transformedProducts[0]
-      };
+    if (transformed.length === 1) {
+      return { redirectUrl: transformed[0].store_url, product: transformed[0] };
     }
 
-    return {
-      products: transformedProducts,
-      total: transformedProducts.length,
-      category: category
-    };
+    return { products: transformed, total: transformed.length, category };
   }
 
-  // Handle store info response
+  // store info
   if (endpoint.includes('/store') && data.result) {
     return {
       store_url: data.result.website || data.result.store_url,
@@ -293,278 +263,155 @@ function processPrintfulResponse(data, endpoint, searchParams) {
     };
   }
 
-  // Return raw data for other endpoints
+  // fallback: return raw data
   return data;
 }
 
-// Generate store URL if not provided by Printful
-function generateStoreUrl(product, category) {
-  // This would typically be your Printful store URL
-  // Replace with your actual store domain
+function generateStoreUrl(product) {
   const storeBase = 'https://dress-custom-apparel.printful.me';
-  const productSlug = product.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'product';
+  const productSlug = (product.name || 'product').toLowerCase().replace(/[^a-z0-9]+/g, '-');
   return `${storeBase}/products/${productSlug}`;
 }
 
-// Infer category from product name
-function inferCategory(productName) {
-  const name = productName?.toLowerCase() || '';
-  
+function inferCategory(productName = '') {
+  const name = productName.toLowerCase();
   if (name.includes('t-shirt') || name.includes('tee')) return 't-shirts';
   if (name.includes('hoodie') || name.includes('sweatshirt')) return 'hoodies';
   if (name.includes('cap') || name.includes('hat') || name.includes('beanie')) return 'caps';
   if (name.includes('mug') || name.includes('bottle') || name.includes('tumbler')) return 'other';
   if (name.includes('bag') || name.includes('tote') || name.includes('backpack')) return 'accessories';
-  
   return 'other';
 }
 
-// Contact Form Handler
+// ---------- Contact & Analytics ----------
 async function handleContactForm(request) {
   if (request.method !== 'POST') {
-    return new Response('Method not allowed', { 
-      status: 405,
-      headers: getCORSHeaders(request)
-    });
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: jsonCORSHeaders(request) });
   }
 
   try {
-    const formData = await request.json();
-    
-    // Validate required fields
+    const body = await request.json();
     const required = ['name', 'email', 'message'];
-    for (const field of required) {
-      if (!formData[field] || !formData[field].trim()) {
-        return new Response(JSON.stringify({
-          error: 'Missing required field',
-          field: field
-        }), {
-          status: 400,
-          headers: {
-            'Content-Type': 'application/json',
-            ...getCORSHeaders(request)
-          }
-        });
+    for (const f of required) {
+      if (!body[f] || !String(body[f]).trim()) {
+        return new Response(JSON.stringify({ error: 'Missing required field', field: f }), { status: 400, headers: jsonCORSHeaders(request) });
       }
     }
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      return new Response(JSON.stringify({
-        error: 'Invalid email format'
-      }), {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          ...getCORSHeaders(request)
-        }
-      });
+    if (!emailRegex.test(body.email)) {
+      return new Response(JSON.stringify({ error: 'Invalid email format' }), { status: 400, headers: jsonCORSHeaders(request) });
     }
 
-    // Log the contact form submission
-    console.log('Contact form submission:', {
-      name: formData.name,
-      email: formData.email,
-      subject: formData.subject || 'Contact from DRESS website',
-      timestamp: new Date().toISOString()
-    });
+    console.log('Contact submission:', { name: body.name, email: body.email, subject: body.subject || '', ts: new Date().toISOString() });
 
-    // Here you could integrate with email services like:
-    // - SendGrid
-    // - Mailgun
-    // - AWS SES
-    // - Or store in a database
-
-    // For now, just return success
-    return new Response(JSON.stringify({
-      success: true,
-      message: 'Thank you for your message! We\'ll get back to you soon.',
-      timestamp: new Date().toISOString()
-    }), {
-      headers: {
-        'Content-Type': 'application/json',
-        ...getCORSHeaders(request)
-      }
-    });
-
-  } catch (error) {
-    console.error('Contact form error:', error);
-    return new Response(JSON.stringify({
-      error: 'Failed to process contact form',
-      message: error.message
-    }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        ...getCORSHeaders(request)
-      }
-    });
+    return new Response(JSON.stringify({ success: true, message: "Thank you! We'll get back to you soon." }), { headers: jsonCORSHeaders(request) });
+  } catch (err) {
+    console.error('Contact error:', err);
+    return new Response(JSON.stringify({ error: 'Failed to process contact form', message: err?.message || String(err) }), { status: 500, headers: jsonCORSHeaders(request) });
   }
 }
 
-// Analytics Handler
 async function handleAnalytics(request) {
   if (request.method !== 'POST') {
-    return new Response('Method not allowed', { 
-      status: 405,
-      headers: getCORSHeaders(request)
-    });
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: jsonCORSHeaders(request) });
   }
 
   try {
-    const analyticsData = await request.json();
-    
-    // Log analytics event
-    console.log('Analytics event:', {
-      type: analyticsData.type,
-      category: analyticsData.category,
-      timestamp: analyticsData.timestamp,
-      userAgent: request.headers.get('User-Agent'),
-      ip: request.headers.get('CF-Connecting-IP'),
-      country: request.headers.get('CF-IPCountry')
-    });
-
-    // Here you could store analytics data in:
-    // - Cloudflare Analytics Engine
-    // - Google Analytics
-    // - Custom database
-    // - Third-party analytics service
-
-    return new Response(JSON.stringify({
-      success: true,
-      message: 'Analytics event recorded'
-    }), {
-      headers: {
-        'Content-Type': 'application/json',
-        ...getCORSHeaders(request)
-      }
-    });
-
-  } catch (error) {
-    console.error('Analytics error:', error);
-    return new Response(JSON.stringify({
-      error: 'Failed to record analytics',
-      message: error.message
-    }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        ...getCORSHeaders(request)
-      }
-    });
+    const data = await request.json();
+    console.log('Analytics event:', { type: data.type, category: data.category, ts: data.timestamp || Date.now(), ua: request.headers.get('User-Agent') });
+    return new Response(JSON.stringify({ success: true, message: 'Recorded' }), { headers: jsonCORSHeaders(request) });
+  } catch (err) {
+    console.error('Analytics error:', err);
+    return new Response(JSON.stringify({ error: 'Failed to record analytics', message: err?.message || String(err) }), { status: 500, headers: jsonCORSHeaders(request) });
   }
 }
 
-// CORS Handler
+// ---------- CORS ----------
 function handleCORS(request) {
-  return new Response(null, {
-    status: 200,
-    headers: getCORSHeaders(request)
-  });
+  return new Response(null, { status: 204, headers: corsHeadersForRequest(request) });
 }
 
-// Get CORS headers
-function getCORSHeaders(request) {
-  const origin = request.headers.get('Origin');
-  const allowedOrigin = CONFIG.ALLOWED_ORIGINS.includes(origin) ? origin : CONFIG.ALLOWED_ORIGINS[0];
-
+function corsHeadersForRequest(request) {
+  const origin = request.headers.get('Origin') || '';
+  const allowed = CONFIG.ALLOWED_ORIGINS.includes(origin) ? origin : CONFIG.ALLOWED_ORIGINS[0];
   return {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
     'Access-Control-Max-Age': '86400',
-    'Access-Control-Allow-Credentials': 'true'
+    'Access-Control-Allow-Credentials': 'true',
+    'Content-Type': 'application/json'
   };
 }
 
-// Rate Limiting
+function jsonCORSHeaders(request) {
+  return { 'Content-Type': 'application/json', ...corsHeadersForRequest(request) };
+}
+
+// ---------- Rate limiting (per-instance) ----------
 function checkRateLimit(request) {
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('x-forwarded-for') || 'unknown';
   const now = Date.now();
   const windowStart = now - CONFIG.RATE_LIMIT.WINDOW;
 
-  // Clean old entries
+  // clean up old timestamps
   for (const [key, timestamps] of rateLimitStore.entries()) {
     const filtered = timestamps.filter(t => t > windowStart);
-    if (filtered.length === 0) {
-      rateLimitStore.delete(key);
-    } else {
-      rateLimitStore.set(key, filtered);
-    }
+    if (filtered.length === 0) rateLimitStore.delete(key);
+    else rateLimitStore.set(key, filtered);
   }
 
-  // Check current IP
   const requests = rateLimitStore.get(ip) || [];
-  const recentRequests = requests.filter(t => t > windowStart);
+  const recent = requests.filter(t => t > windowStart);
 
-  if (recentRequests.length >= CONFIG.RATE_LIMIT.MAX_REQUESTS) {
-    return { allowed: false, remaining: 0 };
-  }
+  if (recent.length >= CONFIG.RATE_LIMIT.MAX_REQUESTS) return { allowed: false, remaining: 0 };
 
-  // Add current request
-  recentRequests.push(now);
-  rateLimitStore.set(ip, recentRequests);
+  recent.push(now);
+  rateLimitStore.set(ip, recent);
 
-  return { 
-    allowed: true, 
-    remaining: CONFIG.RATE_LIMIT.MAX_REQUESTS - recentRequests.length 
-  };
+  return { allowed: true, remaining: CONFIG.RATE_LIMIT.MAX_REQUESTS - recent.length };
 }
 
-// Simple in-memory cache (resets on worker restart)
-const cache = new Map();
-
+// ---------- Simple in-memory cache ----------
 async function getCache(key) {
   const item = cache.get(key);
   if (!item) return null;
-  
   if (Date.now() > item.expires) {
     cache.delete(key);
     return null;
   }
-  
   return item.data;
 }
 
 async function setCache(key, data, ttl) {
-  cache.set(key, {
-    data,
-    expires: Date.now() + (ttl * 1000)
-  });
+  cache.set(key, { data, expires: Date.now() + ttl * 1000 });
 }
 
-// Health Check Endpoint
-function handleHealthCheck() {
+// ---------- Health & errors ----------
+function handleHealthCheck(request, env) {
   return new Response(JSON.stringify({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     version: '2.0.0',
     services: {
-      printful: !!PRINTFUL_API_KEY,
-      cache: cache.size,
-      rateLimit: rateLimitStore.size
+      printful_configured: !!env?.PRINTFUL_API_KEY,
+      cache_items: cache.size,
+      rate_limit_keys: rateLimitStore.size
     }
   }), {
-    headers: {
-      'Content-Type': 'application/json'
-    }
+    headers: jsonCORSHeaders(request)
   });
 }
 
-// Error Handler
 function handleError(error, request) {
   console.error('Worker Error:', error);
-  
   return new Response(JSON.stringify({
     error: 'Internal Server Error',
-    message: error.message,
+    message: error?.message || String(error),
     timestamp: new Date().toISOString()
   }), {
     status: 500,
-    headers: {
-      'Content-Type': 'application/json',
-      ...getCORSHeaders(request)
-    }
+    headers: jsonCORSHeaders(request)
   });
 }

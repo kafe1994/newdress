@@ -1,0 +1,158 @@
+<!-- HTML Dinámico para Productos Organizados por Categorías -->
+<!-- Este HTML debe insertarse en el contenedor: <div id="products-container"> -->
+
+<div class="products-dynamic-container">
+  <!-- Plantilla para generar dinámicamente -->
+  <!-- Usar este código JavaScript para generar el HTML -->
+  
+  <!-- Función JavaScript para generar productos dinámicamente -->
+  <script>
+  function generateProductsHTML(products) {
+    // Agrupar productos por categoría
+    const productsByCategory = products.reduce((acc, item) => {
+      const category = item.product.category || 'other';
+      if (!acc[category]) {
+        acc[category] = [];
+      }
+      acc[category].push(item);
+      return acc;
+    }, {});
+
+    // Nombres de categorías en español
+    const categoryNames = {
+      't-shirts': 'Camisetas',
+      'hoodies': 'Sudaderas',
+      'caps': 'Gorras',
+      'accessories': 'Accesorios',
+      'mugs': 'Tazas',
+      'other': 'Otros Productos'
+    };
+
+    let html = '';
+
+    // Generar HTML por categoría
+    Object.keys(productsByCategory).forEach(category => {
+      const categoryProducts = productsByCategory[category];
+      const categoryDisplayName = categoryNames[category] || category.charAt(0).toUpperCase() + category.slice(1);
+      
+      html += `
+        <section class="category-section" data-category="${category}">
+          <div class="category-header">
+            <h2 class="category-title">${categoryDisplayName}</h2>
+            <div class="category-divider"></div>
+          </div>
+          
+          <div class="products-grid">
+      `;
+      
+      // Generar cada producto de la categoría
+      categoryProducts.forEach(item => {
+        const product = item.product;
+        const redirectUrl = item.redirectUrl || product.store_url;
+        const price = product.price ? `$${product.price} ${product.currency || 'USD'}` : 'Consultar precio';
+        const hasPrice = product.price !== null && product.price !== undefined;
+        
+        html += `
+          <div class="product-card" data-product-id="${product.id}">
+            <div class="product-image-container">
+              <img src="${product.thumbnail}" alt="${product.name}" class="product-image" loading="lazy">
+              <div class="product-overlay">
+                <div class="overlay-buttons">
+                  <button class="quick-view-btn" onclick="quickViewProduct('${product.id}')" title="Vista rápida">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button class="favorite-btn" onclick="toggleFavorite('${product.id}')" title="Agregar a favoritos">
+                    <i class="far fa-heart"></i>
+                  </button>
+                </div>
+              </div>
+              ${hasPrice ? '<div class="price-badge">' + price + '</div>' : ''}
+            </div>
+            
+            <div class="product-info">
+              <h3 class="product-name">${product.name}</h3>
+              <div class="product-price-section">
+                <span class="product-price ${hasPrice ? 'available' : 'unavailable'}">${price}</span>
+              </div>
+              <button class="buy-button" onclick="redirectToProduct('${redirectUrl}')">
+                <span>Ver Producto</span>
+                <i class="fas fa-external-link-alt"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      });
+      
+      html += `
+          </div>
+        </section>
+      `;
+    });
+
+    return html;
+  }
+
+  // Función para redirigir al producto
+  function redirectToProduct(url) {
+    if (url) {
+      window.open(url, '_blank');
+    }
+  }
+
+  // Función de vista rápida (placeholder)
+  function quickViewProduct(productId) {
+    console.log('Vista rápida del producto:', productId);
+    // Implementar modal de vista rápida
+  }
+
+  // Función para toggle de favoritos
+  function toggleFavorite(productId) {
+    console.log('Toggle favorito:', productId);
+    // Implementar lógica de favoritos
+  }
+
+  // Ejemplo de uso:
+  // const productsContainer = document.getElementById('products-container');
+  // productsContainer.innerHTML = generateProductsHTML(productosDesdeAPI);
+  </script>
+</div>
+
+<!-- Ejemplo de estructura HTML generada -->
+<div class="example-structure" style="display: none;">
+  <section class="category-section" data-category="t-shirts">
+    <div class="category-header">
+      <h2 class="category-title">Camisetas</h2>
+      <div class="category-divider"></div>
+    </div>
+    
+    <div class="products-grid">
+      <div class="product-card" data-product-id="123">
+        <div class="product-image-container">
+          <img src="https://example.com/image.png" alt="Producto" class="product-image" loading="lazy">
+          <div class="product-overlay">
+            <div class="overlay-buttons">
+              <button class="quick-view-btn" title="Vista rápida">
+                <i class="fas fa-eye"></i>
+              </button>
+              <button class="favorite-btn" title="Agregar a favoritos">
+                <i class="far fa-heart"></i>
+              </button>
+            </div>
+          </div>
+          <div class="price-badge">$19.99 USD</div>
+        </div>
+        
+        <div class="product-info">
+          <h3 class="product-name">Camiseta Premium</h3>
+          <div class="product-price-section">
+            <span class="product-price available">$19.99 USD</span>
+          </div>
+          <button class="buy-button">
+            <span>Ver Producto</span>
+            <i class="fas fa-external-link-alt"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
