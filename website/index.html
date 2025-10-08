@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dress - Ropa Personalizada Premium</title>
-    <meta name="description" content="Dress - Ropa personalizada premium y accesorios únicos. Descubre camisetas, sudaderas, gorras y más diseños exclusivos.">
+    <title>Dress - Premium Custom Apparel</title>
+    <meta name="description" content="Dress - Premium custom apparel and unique accessories. Discover t-shirts, hoodies, caps and exclusive designs.">
     
-    <!-- Fuentes serif editoriales y sans-serif modernas -->
+    <!-- Modern serif editorial and sans-serif fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -14,12 +14,12 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
-    <!-- Estilos mejorados -->
+    <!-- Enhanced Styles -->
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/enhanced-style.css">
 </head>
 <body>
-    <!-- Navigation Mejorada -->
+    <!-- Enhanced Navigation -->
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-logo">
@@ -27,16 +27,16 @@
             </div>
             <ul class="nav-menu">
                 <li class="nav-item">
-                    <a href="#home" class="nav-link"><i class="fas fa-home"></i> Inicio</a>
+                    <a href="#home" class="nav-link"><i class="fas fa-home"></i> Home</a>
                 </li>
                 <li class="nav-item">
-                    <a href="#products" class="nav-link"><i class="fas fa-shopping-bag"></i> Productos</a>
+                    <a href="#products" class="nav-link"><i class="fas fa-shopping-bag"></i> Products</a>
                 </li>
                 <li class="nav-item">
-                    <a href="#contact" class="nav-link"><i class="fas fa-envelope"></i> Contacto</a>
+                    <a href="#contact" class="nav-link"><i class="fas fa-envelope"></i> Contact</a>
                 </li>
                 <li class="nav-item">
-                    <a href="terms.html" class="nav-link"><i class="fas fa-file-contract"></i> Términos</a>
+                    <a href="terms.html" class="nav-link"><i class="fas fa-file-contract"></i> Terms</a>
                 </li>
             </ul>
             <div class="nav-extras">
@@ -56,37 +56,37 @@
         </div>
     </nav>
 
-    <!-- Hero Section Mejorado -->
+    <!-- Enhanced Hero Section -->
     <section id="home" class="hero">
         <div class="hero-background">
             <div class="hero-particles"></div>
         </div>
         <div class="hero-content">
-            <div class="hero-badge">Nueva Colección 2025</div>
-            <h2>Ropa Personalizada Premium</h2>
-            <p>Expresa tu estilo único con nuestra colección exclusiva de ropa personalizada y accesorios</p>
+            <div class="hero-badge">New Collection 2025</div>
+            <h2>Premium Custom Apparel</h2>
+            <p>Express your unique style with our exclusive collection of custom apparel and accessories</p>
             <div class="hero-buttons">
                 <button class="cta-button primary" onclick="scrollToProducts()">
-                    <span>Ver Productos</span>
+                    <span>Shop Now</span>
                     <i class="fas fa-arrow-right"></i>
                 </button>
                 <button class="cta-button secondary" onclick="openLookbook()">
-                    <span>Catálogo</span>
+                    <span>Catalog</span>
                     <i class="fas fa-images"></i>
                 </button>
             </div>
             <div class="hero-stats">
                 <div class="stat-item">
                     <span class="stat-number">10K+</span>
-                    <span class="stat-label">Clientes Felices</span>
+                    <span class="stat-label">Happy Customers</span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-number">50+</span>
-                    <span class="stat-label">Diseños Únicos</span>
+                    <span class="stat-label">Unique Designs</span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-number">24/7</span>
-                    <span class="stat-label">Soporte</span>
+                    <span class="stat-label">Support</span>
                 </div>
             </div>
         </div>
@@ -95,36 +95,98 @@
         </div>
     </section>
 
-    <!-- Sección de Tendencias -->
+    <!-- Featured Categories Section -->
+    <section class="categories-section">
+        <div class="container">
+            <h2 class="section-title">
+                Shop by <span class="title-highlight">Category</span>
+            </h2>
+            <div class="categories-grid">
+                <div class="category-card" data-category="t-shirts" onclick="filterProducts('t-shirts')">
+                    <div class="category-image">
+                        <img src="images/t-shirts/mockup.jpg" alt="T-Shirts Collection" loading="lazy">
+                        <div class="category-overlay">
+                            <div class="category-info">
+                                <h3>T-Shirts</h3>
+                                <p>Premium quality tees</p>
+                                <span class="shop-now">Shop Now <i class="fas fa-arrow-right"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="category-card" data-category="hoodies" onclick="filterProducts('hoodies')">
+                    <div class="category-image">
+                        <img src="images/hoodies/mockup.jpg" alt="Hoodies Collection" loading="lazy">
+                        <div class="category-overlay">
+                            <div class="category-info">
+                                <h3>Hoodies</h3>
+                                <p>Comfort meets style</p>
+                                <span class="shop-now">Shop Now <i class="fas fa-arrow-right"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="category-card" data-category="caps" onclick="filterProducts('caps')">
+                    <div class="category-image">
+                        <img src="images/caps/mockup.jpg" alt="Caps Collection" loading="lazy">
+                        <div class="category-overlay">
+                            <div class="category-info">
+                                <h3>Caps</h3>
+                                <p>Complete your look</p>
+                                <span class="shop-now">Shop Now <i class="fas fa-arrow-right"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="category-card" data-category="accessories" onclick="filterProducts('accessories')">
+                    <div class="category-image">
+                        <img src="images/accessories/mockup.jpg" alt="Accessories Collection" loading="lazy">
+                        <div class="category-overlay">
+                            <div class="category-info">
+                                <h3>Accessories</h3>
+                                <p>Perfect finishing touches</p>
+                                <span class="shop-now">Shop Now <i class="fas fa-arrow-right"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Trends Section -->
     <section class="trends-section">
         <div class="container">
             <h2 class="section-title">
-                <span class="title-highlight">Últimas Tendencias</span> y Novedades
+                <span class="title-highlight">Latest Trends</span> & News
             </h2>
             <div class="slider-container">
                 <div class="slider">
                     <div class="slide active">
                         <div class="slide-content">
                             <div class="slide-icon"><i class="fas fa-star"></i></div>
-                            <h3>Nueva Colección 2025</h3>
-                            <p>Descubre nuestros últimos diseños con gráficos vanguardistas y materiales de calidad premium</p>
-                            <button class="slide-btn">Explorar Ahora</button>
+                            <h3>New Collection 2025</h3>
+                            <p>Discover our latest designs with cutting-edge graphics and premium quality materials</p>
+                            <button class="slide-btn">Explore Now</button>
                         </div>
                     </div>
                     <div class="slide">
                         <div class="slide-content">
                             <div class="slide-icon"><i class="fas fa-fire"></i></div>
-                            <h3>Sudaderas Edición Limitada</h3>
-                            <p>Diseños exclusivos de sudaderas disponibles por tiempo limitado. Comodidad premium con estilo único</p>
-                            <button class="slide-btn">Ver Limitadas</button>
+                            <h3>Limited Edition Hoodies</h3>
+                            <p>Exclusive hoodie designs available for a limited time. Premium comfort with unique style</p>
+                            <button class="slide-btn">View Limited</button>
                         </div>
                     </div>
                     <div class="slide">
                         <div class="slide-content">
                             <div class="slide-icon"><i class="fas fa-crown"></i></div>
-                            <h3>Accesorios Personalizados</h3>
-                            <p>Personaliza tu look con nuestra gama de gorras, tazas y accesorios únicos</p>
-                            <button class="slide-btn">Personalizar</button>
+                            <h3>Custom Accessories</h3>
+                            <p>Personalize your look with our range of caps, mugs and unique accessories</p>
+                            <button class="slide-btn">Customize</button>
                         </div>
                     </div>
                 </div>
@@ -139,57 +201,65 @@
         </div>
     </section>
 
-    <!-- Sección de Productos Dinámicos -->
+    <!-- Dynamic Products Section -->
     <section id="products" class="products-section">
         <div class="container">
             <h2 class="section-title">
-                Nuestros <span class="title-highlight">Productos</span> Premium
+                Our <span class="title-highlight">Premium</span> Products
             </h2>
             
-            <!-- Filtros de productos -->
+            <!-- Product Filters -->
             <div class="products-filter">
-                <button class="filter-btn active" data-filter="all">Todos los Productos</button>
-                <button class="filter-btn" data-filter="t-shirts">Camisetas</button>
-                <button class="filter-btn" data-filter="hoodies">Sudaderas</button>
-                <button class="filter-btn" data-filter="caps">Gorras</button>
-                <button class="filter-btn" data-filter="accessories">Accesorios</button>
+                <button class="filter-btn active" data-filter="all" onclick="filterProducts('all')">All Products</button>
+                <button class="filter-btn" data-filter="t-shirts" onclick="filterProducts('t-shirts')">T-Shirts</button>
+                <button class="filter-btn" data-filter="hoodies" onclick="filterProducts('hoodies')">Hoodies</button>
+                <button class="filter-btn" data-filter="caps" onclick="filterProducts('caps')">Caps</button>
+                <button class="filter-btn" data-filter="accessories" onclick="filterProducts('accessories')">Accessories</button>
             </div>
 
-            <!-- Contenedor para productos dinámicos desde la API -->
+            <!-- Dynamic Products Container -->
             <div id="products-container" class="products-dynamic-container">
-                <!-- El HTML de productos se generará dinámicamente aquí -->
+                <!-- Product HTML will be generated dynamically here -->
                 
                 <!-- Loading state -->
-                <div id="products-loading" class="loading-state" style="text-align: center; padding: 3rem; display: none;">
+                <div id="products-loading" class="loading-state" style="text-align: center; padding: 3rem;">
                     <div class="loading-spinner"></div>
-                    <p style="margin-top: 1rem; color: var(--dark-gray);">Cargando productos...</p>
+                    <p style="margin-top: 1rem; color: var(--dark-gray);">Loading products...</p>
                 </div>
                 
                 <!-- Error state -->
                 <div id="products-error" class="error-state" style="text-align: center; padding: 3rem; display: none;">
                     <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: var(--primary-orange); margin-bottom: 1rem;"></i>
-                    <p style="color: var(--dark-gray);">Error al cargar productos. <button onclick="loadProducts()" style="color: var(--primary-orange); background: none; border: none; text-decoration: underline; cursor: pointer;">Reintentar</button></p>
+                    <p style="color: var(--dark-gray);">Error loading products. <button onclick="loadProducts(true)" style="color: var(--primary-orange); background: none; border: none; text-decoration: underline; cursor: pointer;">Retry</button></p>
                 </div>
                 
                 <!-- Empty state -->
                 <div id="products-empty" class="empty-state" style="text-align: center; padding: 3rem; display: none;">
                     <i class="fas fa-box-open" style="font-size: 2rem; color: var(--dark-gray); margin-bottom: 1rem;"></i>
-                    <p style="color: var(--dark-gray);">No hay productos disponibles en este momento.</p>
+                    <p style="color: var(--dark-gray);">No products available at this time.</p>
                 </div>
+            </div>
+
+            <!-- Load More Button -->
+            <div class="load-more-container" style="text-align: center; margin-top: 2rem; display: none;">
+                <button class="cta-button secondary" onclick="loadMoreProducts()">
+                    <span>Load More Products</span>
+                    <i class="fas fa-plus"></i>
+                </button>
             </div>
         </div>
     </section>
 
-    <!-- Sección de Contacto -->
+    <!-- Contact Section -->
     <section id="contact" class="contact-section">
         <div class="container">
             <h2 class="section-title">
-                <span class="title-highlight">Contacta</span> con Nosotros
+                <span class="title-highlight">Get in</span> Touch
             </h2>
             <div class="contact-content">
                 <div class="contact-info">
-                    <h3>¿Tienes alguna pregunta?</h3>
-                    <p>Estamos aquí para ayudarte con cualquier consulta sobre nuestros productos y servicios.</p>
+                    <h3>Have any questions?</h3>
+                    <p>We're here to help you with any inquiries about our products and services.</p>
                     <div class="contact-methods">
                         <div class="contact-method">
                             <i class="fas fa-envelope"></i>
@@ -201,22 +271,25 @@
                         </div>
                         <div class="contact-method">
                             <i class="fas fa-map-marker-alt"></i>
-                            <span>Tu ubicación, Ciudad, País</span>
+                            <span>Your Location, City, Country</span>
                         </div>
                     </div>
                 </div>
                 <form id="contactForm" class="contact-form">
                     <div class="form-group">
-                        <input type="text" id="name" name="name" placeholder="Tu nombre" required>
+                        <input type="text" id="name" name="name" placeholder="Your name" required>
                     </div>
                     <div class="form-group">
-                        <input type="email" id="email" name="email" placeholder="Tu email" required>
+                        <input type="email" id="email" name="email" placeholder="Your email" required>
                     </div>
                     <div class="form-group">
-                        <textarea id="message" name="message" placeholder="Tu mensaje" rows="5" required></textarea>
+                        <input type="text" id="subject" name="subject" placeholder="Subject (optional)">
+                    </div>
+                    <div class="form-group">
+                        <textarea id="message" name="message" placeholder="Your message" rows="5" required></textarea>
                     </div>
                     <button type="submit" class="submit-btn">
-                        <span>Enviar Mensaje</span>
+                        <span>Send Message</span>
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </form>
@@ -230,7 +303,7 @@
             <div class="footer-content">
                 <div class="footer-section">
                     <h3>Dress</h3>
-                    <p>Ropa personalizada premium para expresar tu estilo único.</p>
+                    <p>Premium custom apparel to express your unique style.</p>
                     <div class="social-links">
                         <a href="#" class="social-link"><i class="fab fa-facebook-f"></i></a>
                         <a href="#" class="social-link"><i class="fab fa-instagram"></i></a>
@@ -239,197 +312,41 @@
                     </div>
                 </div>
                 <div class="footer-section">
-                    <h4>Productos</h4>
+                    <h4>Products</h4>
                     <ul>
-                        <li><a href="#">Camisetas</a></li>
-                        <li><a href="#">Sudaderas</a></li>
-                        <li><a href="#">Gorras</a></li>
-                        <li><a href="#">Accesorios</a></li>
+                        <li><a href="#" onclick="filterProducts('t-shirts')">T-Shirts</a></li>
+                        <li><a href="#" onclick="filterProducts('hoodies')">Hoodies</a></li>
+                        <li><a href="#" onclick="filterProducts('caps')">Caps</a></li>
+                        <li><a href="#" onclick="filterProducts('accessories')">Accessories</a></li>
                     </ul>
                 </div>
                 <div class="footer-section">
-                    <h4>Información</h4>
+                    <h4>Information</h4>
                     <ul>
-                        <li><a href="#">Sobre Nosotros</a></li>
-                        <li><a href="#">Envíos</a></li>
-                        <li><a href="#">Devoluciones</a></li>
-                        <li><a href="terms.html">Términos y Condiciones</a></li>
+                        <li><a href="#">About Us</a></li>
+                        <li><a href="#">Shipping</a></li>
+                        <li><a href="#">Returns</a></li>
+                        <li><a href="terms.html">Terms & Conditions</a></li>
                     </ul>
                 </div>
                 <div class="footer-section">
-                    <h4>Soporte</h4>
+                    <h4>Support</h4>
                     <ul>
-                        <li><a href="#">Centro de Ayuda</a></li>
-                        <li><a href="#">Contacto</a></li>
-                        <li><a href="#">Chat en Vivo</a></li>
+                        <li><a href="#">Help Center</a></li>
+                        <li><a href="#contact">Contact</a></li>
+                        <li><a href="#">Live Chat</a></li>
                         <li><a href="#">FAQ</a></li>
                     </ul>
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2025 Dress. Todos los derechos reservados.</p>
+                <p>&copy; 2025 Dress. All rights reserved.</p>
             </div>
         </div>
     </footer>
 
     <!-- Scripts -->
-    <script src="js/script.js"></script>
-    <script>
-        // Función para generar productos dinámicamente desde la API
-        function generateProductsHTML(products) {
-            if (!products || products.length === 0) {
-                document.getElementById('products-empty').style.display = 'block';
-                return '';
-            }
-
-            // Agrupar productos por categoría
-            const productsByCategory = products.reduce((acc, item) => {
-                const category = item.product.category || 'other';
-                if (!acc[category]) {
-                    acc[category] = [];
-                }
-                acc[category].push(item);
-                return acc;
-            }, {});
-
-            // Nombres de categorías en español
-            const categoryNames = {
-                't-shirts': 'Camisetas',
-                'hoodies': 'Sudaderas',
-                'caps': 'Gorras',
-                'accessories': 'Accesorios',
-                'mugs': 'Tazas',
-                'other': 'Otros Productos'
-            };
-
-            let html = '';
-
-            // Generar HTML por categoría
-            Object.keys(productsByCategory).forEach(category => {
-                const categoryProducts = productsByCategory[category];
-                const categoryDisplayName = categoryNames[category] || category.charAt(0).toUpperCase() + category.slice(1);
-                
-                html += `
-                    <section class="category-section" data-category="${category}">
-                        <div class="category-header">
-                            <h2 class="category-title">${categoryDisplayName}</h2>
-                            <div class="category-divider"></div>
-                        </div>
-                        
-                        <div class="products-grid">
-                `;
-                
-                // Generar cada producto de la categoría
-                categoryProducts.forEach(item => {
-                    const product = item.product;
-                    const redirectUrl = item.redirectUrl || product.store_url;
-                    const price = product.price ? `$${product.price} ${product.currency || 'USD'}` : 'Consultar precio';
-                    const hasPrice = product.price !== null && product.price !== undefined;
-                    
-                    html += `
-                        <div class="product-card" data-product-id="${product.id}">
-                            <div class="product-image-container">
-                                <img src="${product.thumbnail}" alt="${product.name}" class="product-image" loading="lazy">
-                                <div class="product-overlay">
-                                    <div class="overlay-buttons">
-                                        <button class="quick-view-btn" onclick="quickViewProduct('${product.id}')" title="Vista rápida">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <button class="favorite-btn" onclick="toggleFavorite('${product.id}')" title="Agregar a favoritos">
-                                            <i class="far fa-heart"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                ${hasPrice ? '<div class="price-badge">' + price + '</div>' : ''}
-                            </div>
-                            
-                            <div class="product-info">
-                                <h3 class="product-name">${product.name}</h3>
-                                <div class="product-price-section">
-                                    <span class="product-price ${hasPrice ? 'available' : 'unavailable'}">${price}</span>
-                                </div>
-                                <button class="buy-button" onclick="redirectToProduct('${redirectUrl}')">
-                                    <span>Ver Producto</span>
-                                    <i class="fas fa-external-link-alt"></i>
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                });
-                
-                html += `
-                        </div>
-                    </section>
-                `;
-            });
-
-            return html;
-        }
-
-        // Función para cargar productos desde la API
-        async function loadProducts() {
-            const loadingEl = document.getElementById('products-loading');
-            const errorEl = document.getElementById('products-error');
-            const emptyEl = document.getElementById('products-empty');
-            const container = document.getElementById('products-container');
-            
-            // Mostrar loading
-            loadingEl.style.display = 'block';
-            errorEl.style.display = 'none';
-            emptyEl.style.display = 'none';
-            
-            try {
-                // Reemplaza esta URL con tu endpoint real de Cloudflare Worker
-                const response = await fetch('/api/printful/products');
-                
-                if (!response.ok) {
-                    throw new Error('Error al cargar productos');
-                }
-                
-                const products = await response.json();
-                
-                // Ocultar loading
-                loadingEl.style.display = 'none';
-                
-                // Generar y mostrar productos
-                const productsHTML = generateProductsHTML(products);
-                container.innerHTML = productsHTML;
-                
-                console.log('Productos cargados exitosamente:', products.length);
-                
-            } catch (error) {
-                console.error('Error al cargar productos:', error);
-                loadingEl.style.display = 'none';
-                errorEl.style.display = 'block';
-            }
-        }
-
-        // Función para redirigir al producto
-        function redirectToProduct(url) {
-            if (url) {
-                window.open(url, '_blank');
-            }
-        }
-
-        // Función de vista rápida (placeholder)
-        function quickViewProduct(productId) {
-            console.log('Vista rápida del producto:', productId);
-            // Implementar modal de vista rápida aquí
-        }
-
-        // Función para toggle de favoritos
-        function toggleFavorite(productId) {
-            console.log('Toggle favorito:', productId);
-            // Implementar lógica de favoritos aquí
-        }
-
-        // Cargar productos al inicializar
-        document.addEventListener('DOMContentLoaded', function() {
-            // Cargar productos después de un pequeño delay para que se vea el loading
-            setTimeout(() => {
-                loadProducts();
-            }, 500);
-        });
-    </script>
+    <script src="js/app.js"></script>
+    <script src="js/products.js"></script>
 </body>
 </html>
