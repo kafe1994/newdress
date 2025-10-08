@@ -1,0 +1,44 @@
+# Cloudflare Worker Configuration for DRESS Website
+name = "dress-printful-worker"
+main = "worker.js"
+compatibility_date = "2025-10-08"
+workers_dev = true  # Permite acceso vía <worker>.workers.dev
+
+# Build configuration
+[build]
+command = "echo 'No build step required'"
+cwd = "./"
+watch_dir = "./"
+
+# Development configuration
+[dev]
+ip = "localhost"
+port = 8787
+local_protocol = "http"
+upstream_protocol = "https"
+
+# Environment Variables (production/staging)
+[env.production.vars]
+ENVIRONMENT = "production"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+
+# Secrets (set with wrangler secret put)
+# wrangler secret put PRINTFUL_API_KEY --env production
+# wrangler secret put PRINTFUL_API_KEY --env staging
+
+# KV Namespaces (opcional, si quieres persistencia)
+# [[kv_namespaces]]
+# binding = "DRESS_CACHE"
+# id = "your-kv-namespace-id"
+# preview_id = "your-preview-kv-namespace-id"
+
+# Durable Objects (opcional)
+# [[durable_objects.bindings]]
+# name = "DRESS_COUNTER"
+# class_name = "Counter"
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+routes = ["https://newdress-cgz.pages.dev/api/printful/*"]

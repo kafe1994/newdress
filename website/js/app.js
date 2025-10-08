@@ -1,106 +1,69 @@
 /**
  * DRESS - Premium Custom Apparel Website
- * Main Application JavaScript
- * Version: 2.0 - Optimized for Printful Worker Integration
+ * Main Application JavaScript - Optimized for Printful API
  */
 
-// ===== GLOBAL CONFIGURATION =====
-const DRESS_CONFIG = {
-    // API Configuration - Works with your Cloudflare Worker
+// ===== CONFIGURATION =====
+const CONFIG = {
     API: {
-        BASE_URL: '/api/printful',
+        BASE_URL: 'https://newdress-cgz.pages.dev/api/printful',
         ENDPOINTS: {
-            PRODUCTS: '/products',
-            STORE: '/store',
-            CONTACT: '/api/contact',
-            ANALYTICS: '/api/analytics'
+            PRODUCTS: '/products'
         },
         TIMEOUT: 15000,
         RETRY_ATTEMPTS: 3,
         RETRY_DELAY: 1000
     },
     
-    // Product Categories (matches your worker's category mapping)
     CATEGORIES: {
-        'all': 'All Products',
-        't-shirts': 'T-Shirts',
-        'hoodies': 'Hoodies', 
-        'caps': 'Caps',
-        'accessories': 'Accessories',
-        'other': 'Other Products'
+        'all': 'Todos los Productos',
+        't-shirts': 'Camisetas',
+        'hoodies': 'Sudaderas',
+        'caps': 'Gorras',
+        'accessories': 'Accesorios',
+        'other': 'Otros'
     },
     
-    // UI Configuration
     UI: {
-        SLIDE_INTERVAL: 6000,
         ANIMATION_DELAY: 100,
         NOTIFICATION_DURATION: 4000,
-        INTERSECTION_THRESHOLD: 0.1
-    },
-    
-    // Cache settings
-    CACHE: {
-        PRODUCTS_TTL: 5 * 60 * 1000, // 5 minutes
-        ENABLE_CACHE: true
+        DEBOUNCE_DELAY: 300
     }
 };
 
 // ===== GLOBAL STATE =====
-const AppState = {
-    currentFilter: 'all',
+const state = {
     products: null,
-    favorites: JSON.parse(localStorage.getItem('dress_favorites')) || [],
-    cart: JSON.parse(localStorage.getItem('dress_cart')) || [],
-    currentSlide: 0,
+    currentFilter: 'all',
     isLoading: false,
-    cache: new Map()
+    retryCount: 0
 };
 
 // ===== INITIALIZATION =====
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🎨 DRESS Website - Enhanced Version Initializing...');
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🎨 DRESS Website - Initializing...');
     initializeApp();
 });
 
 async function initializeApp() {
     try {
-        // Initialize core components
         setupEventListeners();
-        initializeSlider();
         initializeTheme();
-        initializeAnimations();
-        
-        // Load initial data
         await loadProducts();
-        
-        // Setup UI state
-        updateCartDisplay();
-        updateFavoritesDisplay();
-        
-        // Analytics
-        trackEvent('page_view', { page: 'home' });
-        
         console.log('✅ DRESS Website - Initialized successfully');
     } catch (error) {
         console.error('❌ Initialization error:', error);
-        showNotification('Failed to initialize website. Please refresh the page.', 'error');
+        showNotification('Error al inicializar el sitio web', 'error');
     }
 }
 
 // ===== EVENT LISTENERS =====
 function setupEventListeners() {
     // Navigation
-    setupNavigationEvents();
+    setupNavigation();
     
     // Contact form
     setupContactForm();
-    
-    // Window events
-    window.addEventListener('scroll', throttle(handleScroll, 16));
-    window.addEventListener('resize', throttle(handleResize, 250));
-    
-    // Keyboard navigation
-    document.addEventListener('keydown', handleKeyboard);
     
     // Theme toggle
     const themeToggle = document.querySelector('.theme-toggle');
@@ -108,14 +71,14 @@ function setupEventListeners() {
         themeToggle.addEventListener('click', toggleTheme);
     }
     
-    // Cart button
-    const cartBtn = document.querySelector('.cart-btn');
-    if (cartBtn) {
-        cartBtn.addEventListener('click', toggleCart);
-    }
+    // Scroll events
+    window.addEventListener('scroll', handleScroll);
+    
+    // Resize events
+    window.addEventListener('resize', handleResize);
 }
 
-function setupNavigationEvents() {
+function setupNavigation() {
     // Mobile menu toggle
     const hamburger = document.querySelector('.hamburger');
     const navMenu = document.querySelector('.nav-menu');
@@ -130,30 +93,19 @@ function setupNavigationEvents() {
             }
         });
         
-        // Close mobile menu when clicking nav links
+        // Smooth scroll for nav links
         document.querySelectorAll('.nav-link').forEach(link => {
             link.addEventListener('click', (e) => {
-                if (link.getAttribute('href').startsWith('#')) {
+                const href = link.getAttribute('href');
+                if (href && href.startsWith('#')) {
                     e.preventDefault();
-                    const target = document.querySelector(link.getAttribute('href'));
+                    const target = document.querySelector(href);
                     if (target) {
                         target.scrollIntoView({ behavior: 'smooth' });
+                        closeMobileMenu();
                     }
                 }
-                closeMobileMenu();
             });
-        });
-    }
-    
-    // Navbar scroll effect
-    const navbar = document.querySelector('.navbar');
-    if (navbar) {
-        window.addEventListener('scroll', () => {
-            if (window.scrollY > 100) {
-                navbar.classList.add('scrolled');
-            } else {
-                navbar.classList.remove('scrolled');
-            }
         });
     }
 }
@@ -170,164 +122,177 @@ function toggleMobileMenu() {
     const hamburger = document.querySelector('.hamburger');
     const navMenu = document.querySelector('.nav-menu');
     
-    hamburger.classList.toggle('active');
-    navMenu.classList.toggle('active');
-    
-    // Prevent body scroll when menu is open
-    document.body.style.overflow = navMenu.classList.contains('active') ? 'hidden' : '';
+    if (hamburger && navMenu) {
+        hamburger.classList.toggle('active');
+        navMenu.classList.toggle('active');
+        document.body.style.overflow = navMenu.classList.contains('active') ? 'hidden' : '';
+    }
 }
 
 function closeMobileMenu() {
     const hamburger = document.querySelector('.hamburger');
     const navMenu = document.querySelector('.nav-menu');
     
-    hamburger.classList.remove('active');
-    navMenu.classList.remove('active');
-    document.body.style.overflow = '';
-}
-
-// ===== SLIDER FUNCTIONALITY =====
-function initializeSlider() {
-    const slides = document.querySelectorAll('.slide');
-    const dots = document.querySelectorAll('.dot');
-    
-    if (slides.length === 0) return;
-    
-    showSlide(0);
-    startSlideAutoplay();
-}
-
-function showSlide(index) {
-    const slides = document.querySelectorAll('.slide');
-    const dots = document.querySelectorAll('.dot');
-    
-    if (!slides.length) return;
-    
-    // Remove active classes
-    slides.forEach(slide => slide.classList.remove('active'));
-    dots.forEach(dot => dot.classList.remove('active'));
-    
-    // Add active class to current slide
-    if (slides[index]) {
-        slides[index].classList.add('active');
+    if (hamburger && navMenu) {
+        hamburger.classList.remove('active');
+        navMenu.classList.remove('active');
+        document.body.style.overflow = '';
     }
+}
+
+// ===== THEME FUNCTIONALITY =====
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('dress_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeIcon(savedTheme);
+}
+
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
     
-    if (dots[index]) {
-        dots[index].classList.add('active');
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('dress_theme', newTheme);
+    updateThemeIcon(newTheme);
+    
+    showNotification(`Tema ${newTheme === 'dark' ? 'oscuro' : 'claro'} activado`, 'success');
+}
+
+function updateThemeIcon(theme) {
+    const themeIcon = document.querySelector('.theme-toggle i');
+    if (themeIcon) {
+        themeIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
     }
-    
-    // Move slider
-    const slider = document.querySelector('.slider');
-    if (slider) {
-        slider.style.transform = `translateX(-${index * 100}%)`;
-    }
-    
-    AppState.currentSlide = index;
 }
 
-function changeSlide(direction) {
-    const slides = document.querySelectorAll('.slide');
-    const totalSlides = slides.length;
-    
-    if (!totalSlides) return;
-    
-    let newIndex = AppState.currentSlide + direction;
-    if (newIndex >= totalSlides) newIndex = 0;
-    else if (newIndex < 0) newIndex = totalSlides - 1;
-    
-    showSlide(newIndex);
-}
-
-function currentSlide(index) {
-    showSlide(index - 1);
-}
-
-function startSlideAutoplay() {
-    setInterval(() => {
-        if (!document.hidden) {
-            changeSlide(1);
+// ===== SCROLL HANDLERS =====
+function handleScroll() {
+    const navbar = document.querySelector('.navbar');
+    if (navbar) {
+        if (window.scrollY > 100) {
+            navbar.classList.add('scrolled');
+        } else {
+            navbar.classList.remove('scrolled');
         }
-    }, DRESS_CONFIG.UI.SLIDE_INTERVAL);
+    }
 }
 
-// ===== PRODUCTS FUNCTIONALITY =====
+function handleResize() {
+    // Handle any resize-specific logic here
+    if (window.innerWidth > 768) {
+        closeMobileMenu();
+    }
+}
+
+// ===== SCROLL FUNCTIONS =====
+function scrollToProducts() {
+    const productsSection = document.getElementById('products');
+    if (productsSection) {
+        productsSection.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+// ===== API FUNCTIONS =====
 async function loadProducts(forceRefresh = false) {
-    if (AppState.isLoading) return;
-    
-    const cacheKey = 'products_all';
-    
-    // Check cache first
-    if (!forceRefresh && DRESS_CONFIG.CACHE.ENABLE_CACHE) {
-        const cached = getCachedData(cacheKey);
-        if (cached) {
-            AppState.products = cached;
-            displayProducts(cached);
-            return;
-        }
-    }
+    if (state.isLoading) return;
     
     try {
-        AppState.isLoading = true;
+        state.isLoading = true;
+        state.retryCount = 0;
         showLoadingState();
         
-        const products = await apiCall(DRESS_CONFIG.API.ENDPOINTS.PRODUCTS);
+        console.log('📡 Loading products from API...');
+        const products = await fetchWithRetry(`${CONFIG.API.BASE_URL}${CONFIG.API.ENDPOINTS.PRODUCTS}`);
         
-        // Cache the results
-        if (DRESS_CONFIG.CACHE.ENABLE_CACHE) {
-            setCachedData(cacheKey, products);
-        }
-        
-        AppState.products = products;
+        state.products = products;
         displayProducts(products);
         
-        // Track analytics
-        trackEvent('products_loaded', { count: products?.length || 0 });
+        console.log('✅ Products loaded successfully:', products?.length || 0);
         
     } catch (error) {
         console.error('❌ Error loading products:', error);
         showErrorState(error.message);
-        trackEvent('products_error', { error: error.message });
     } finally {
-        AppState.isLoading = false;
-        hideLoadingState();
+        state.isLoading = false;
     }
 }
 
+async function fetchWithRetry(url, options = {}) {
+    const maxRetries = CONFIG.API.RETRY_ATTEMPTS;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`🔄 Fetch attempt ${attempt}/${maxRetries}: ${url}`);
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), CONFIG.API.TIMEOUT);
+            
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal,
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('La respuesta no es JSON válido');
+            }
+            
+            const data = await response.json();
+            console.log('📦 API Response:', data);
+            
+            return data;
+            
+        } catch (error) {
+            console.error(`❌ Fetch attempt ${attempt} failed:`, error.message);
+            
+            if (attempt === maxRetries) {
+                throw new Error(`Error al cargar productos después de ${maxRetries} intentos: ${error.message}`);
+            }
+            
+            if (attempt < maxRetries) {
+                console.log(`⏳ Retrying in ${CONFIG.API.RETRY_DELAY}ms...`);
+                await new Promise(resolve => setTimeout(resolve, CONFIG.API.RETRY_DELAY * attempt));
+            }
+        }
+    }
+}
+
+// ===== PRODUCT DISPLAY =====
 function displayProducts(data) {
     const container = document.getElementById('products-container');
     if (!container) return;
     
     hideLoadingState();
     hideErrorState();
+    hideEmptyState();
     
-    if (!data || (Array.isArray(data) && data.length === 0)) {
+    if (!data || !Array.isArray(data) || data.length === 0) {
         showEmptyState();
         return;
     }
     
-    // Handle different response formats from your worker
-    let products = [];
-    
-    if (Array.isArray(data)) {
-        products = data;
-    } else if (data.products && Array.isArray(data.products)) {
-        products = data.products;
-    } else if (data.result && Array.isArray(data.result)) {
-        products = data.result;
-    }
-    
-    if (products.length === 0) {
-        showEmptyState();
-        return;
-    }
+    console.log('🎨 Displaying products:', data.length);
     
     // Group products by category
-    const productsByCategory = groupProductsByCategory(products);
+    const productsByCategory = groupProductsByCategory(data);
     
     // Generate HTML
     let html = '';
-    Object.entries(productsByCategory).forEach(([category, categoryProducts]) => {
-        html += generateCategoryHTML(category, categoryProducts);
+    Object.entries(productsByCategory).forEach(([category, products]) => {
+        if (products.length > 0) {
+            html += generateCategoryHTML(category, products);
+        }
     });
     
     container.innerHTML = html;
@@ -335,37 +300,37 @@ function displayProducts(data) {
     // Setup animations
     setupProductAnimations();
     
-    console.log('✅ Products displayed successfully:', products.length);
+    // Show all products initially
+    filterProducts('all');
 }
 
 function groupProductsByCategory(products) {
     const grouped = {};
     
     products.forEach((item, index) => {
-        // Handle different data structures from your worker
+        // Handle different data structures
         const product = item.product || item;
-        const category = normalizeCategory(product.category || inferCategoryFromName(product.name));
+        const category = normalizeCategory(product.category) || 'other';
         
         if (!grouped[category]) {
             grouped[category] = [];
         }
         
-        // Ensure consistent product structure
-        const normalizedItem = {
-            product: {
-                id: product.id,
-                name: product.name || 'Unnamed Product',
-                thumbnail: product.thumbnail || product.thumbnail_url || product.image_url || getPlaceholderImage(),
-                store_url: product.store_url || product.product_url || '#',
-                price: product.price || product.retail_price,
-                currency: product.currency || 'USD',
-                category: category,
-                status: product.status || 'active'
-            },
-            redirectUrl: item.redirectUrl || product.store_url || product.product_url
+        // Normalize product structure
+        const normalizedProduct = {
+            id: product.id || `product_${index}`,
+            name: product.name || 'Producto sin nombre',
+            thumbnail: product.thumbnail || product.thumbnail_url || product.image_url || getPlaceholderImage(),
+            store_url: product.store_url || product.product_url || '#',
+            price: product.price || product.retail_price,
+            currency: product.currency || 'USD',
+            category: category,
+            variants: product.variants || [],
+            colors: extractColors(product.variants || []),
+            sizes: extractSizes(product.variants || [])
         };
         
-        grouped[category].push(normalizedItem);
+        grouped[category].push(normalizedProduct);
     });
     
     return grouped;
@@ -376,7 +341,6 @@ function normalizeCategory(category) {
     
     const normalized = category.toLowerCase().trim();
     
-    // Map variations to standard categories
     const categoryMap = {
         'tshirt': 't-shirts',
         'tshirts': 't-shirts',
@@ -391,102 +355,103 @@ function normalizeCategory(category) {
         'hats': 'caps',
         'beanie': 'caps',
         'accessory': 'accessories',
-        'mug': 'other',
-        'mugs': 'other',
-        'bottle': 'other',
+        'mug': 'accessories',
+        'mugs': 'accessories',
+        'bottle': 'accessories',
         'bag': 'accessories',
         'bags': 'accessories'
     };
     
-    return categoryMap[normalized] || normalized;
+    return categoryMap[normalized] || 'other';
 }
 
-function inferCategoryFromName(name = '') {
-    const lowerName = name.toLowerCase();
+function extractColors(variants) {
+    const colors = new Set();
     
-    if (lowerName.includes('t-shirt') || lowerName.includes('tee')) return 't-shirts';
-    if (lowerName.includes('hoodie') || lowerName.includes('sweatshirt')) return 'hoodies';
-    if (lowerName.includes('cap') || lowerName.includes('hat') || lowerName.includes('beanie')) return 'caps';
-    if (lowerName.includes('mug') || lowerName.includes('bottle')) return 'other';
-    if (lowerName.includes('bag') || lowerName.includes('tote')) return 'accessories';
+    variants.forEach(variant => {
+        if (variant.color) {
+            colors.add(variant.color);
+        }
+        if (variant.color_code) {
+            colors.add(variant.color_code);
+        }
+    });
     
-    return 'other';
+    return Array.from(colors);
+}
+
+function extractSizes(variants) {
+    const sizes = new Set();
+    
+    variants.forEach(variant => {
+        if (variant.size) {
+            sizes.add(variant.size);
+        }
+    });
+    
+    return Array.from(sizes);
 }
 
 function generateCategoryHTML(category, products) {
-    const categoryName = DRESS_CONFIG.CATEGORIES[category] || formatCategoryName(category);
+    const categoryName = CONFIG.CATEGORIES[category] || formatCategoryName(category);
     
     let html = `
-        <section class="category-section" data-category="${category}">
-            <div class="category-header">
-                <h2 class="category-title">${categoryName}</h2>
-                <div class="category-divider"></div>
-            </div>
-            <div class="products-grid">
+        <div class="category-section" data-category="${category}">
+            <h3 class="category-title">${categoryName}</h3>
+            <div class="category-products">
     `;
     
-    products.forEach((item, index) => {
-        html += generateProductCardHTML(item, index);
+    products.forEach((product, index) => {
+        html += generateProductCardHTML(product, index);
     });
     
     html += `
             </div>
-        </section>
+        </div>
     `;
     
     return html;
 }
 
-function generateProductCardHTML(item, index) {
-    const product = item.product;
-    const redirectUrl = item.redirectUrl || product.store_url || '#';
+function generateProductCardHTML(product, index) {
     const price = formatPrice(product.price, product.currency);
-    const hasPrice = product.price !== null && product.price !== undefined;
-    const isFavorite = AppState.favorites.includes(String(product.id));
+    const hasVariants = product.colors.length > 0 || product.sizes.length > 0;
     
     return `
         <div class="product-card" 
              data-product-id="${product.id}" 
              data-category="${product.category}"
-             style="animation-delay: ${index * DRESS_CONFIG.UI.ANIMATION_DELAY}ms">
+             style="animation-delay: ${index * CONFIG.UI.ANIMATION_DELAY}ms">
+            
             <div class="product-image-container">
                 <img src="${product.thumbnail}" 
                      alt="${escapeHtml(product.name)}" 
                      class="product-image" 
                      loading="lazy"
                      onerror="handleImageError(this)">
+                
                 <div class="product-overlay">
                     <div class="overlay-buttons">
-                        <button class="quick-view-btn" 
+                        <button class="overlay-btn" 
                                 onclick="quickViewProduct('${product.id}')" 
-                                title="Quick view"
-                                aria-label="Quick view ${escapeHtml(product.name)}">
+                                title="Vista rápida">
                             <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="favorite-btn ${isFavorite ? 'active' : ''}" 
-                                onclick="toggleFavorite('${product.id}')" 
-                                title="${isFavorite ? 'Remove from favorites' : 'Add to favorites'}"
-                                aria-label="${isFavorite ? 'Remove from favorites' : 'Add to favorites'}">
-                            <i class="${isFavorite ? 'fas' : 'far'} fa-heart"></i>
                         </button>
                     </div>
                 </div>
-                ${hasPrice ? `<div class="price-badge">${price}</div>` : ''}
             </div>
             
             <div class="product-info">
-                <h3 class="product-name" title="${escapeHtml(product.name)}">
-                    ${escapeHtml(product.name)}
-                </h3>
-                <div class="product-price-section">
-                    <span class="product-price ${hasPrice ? 'available' : 'unavailable'}">
-                        ${price}
-                    </span>
-                </div>
+                <h3 class="product-name">${escapeHtml(product.name)}</h3>
+                
+                <div class="product-price">${price}</div>
+                
+                ${hasVariants ? generateVariantsHTML(product) : ''}
+                
                 <button class="buy-button" 
-                        onclick="redirectToProduct('${redirectUrl}')"
-                        aria-label="View product ${escapeHtml(product.name)}">
-                    <span>Shop Now</span>
+                        onclick="redirectToProduct('${product.store_url}', '${escapeHtml(product.name)}')"
+                        title="Ver producto ${escapeHtml(product.name)}">
+                    <span>Ver Producto</span>
                     <i class="fas fa-external-link-alt"></i>
                 </button>
             </div>
@@ -494,9 +459,93 @@ function generateProductCardHTML(item, index) {
     `;
 }
 
+function generateVariantsHTML(product) {
+    let html = '<div class="product-variants">';
+    
+    if (product.colors.length > 0) {
+        html += `
+            <div class="variant-title">Colores disponibles:</div>
+            <div class="variant-colors">
+        `;
+        
+        product.colors.slice(0, 6).forEach(color => {
+            const colorStyle = getColorStyle(color);
+            html += `
+                <div class="color-option" 
+                     style="${colorStyle}" 
+                     title="${color}"
+                     onclick="selectVariant('color', '${color}', '${product.id}')">
+                </div>
+            `;
+        });
+        
+        if (product.colors.length > 6) {
+            html += `<span class="more-colors">+${product.colors.length - 6} más</span>`;
+        }
+        
+        html += '</div>';
+    }
+    
+    if (product.sizes.length > 0) {
+        html += `
+            <div class="variant-title">Tallas disponibles:</div>
+            <div class="variant-sizes">
+        `;
+        
+        product.sizes.forEach(size => {
+            html += `
+                <span class="size-option" 
+                      onclick="selectVariant('size', '${size}', '${product.id}')"
+                      title="Talla ${size}">
+                    ${size}
+                </span>
+            `;
+        });
+        
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    return html;
+}
+
+function getColorStyle(color) {
+    // Map color names to CSS colors
+    const colorMap = {
+        'black': '#000000',
+        'white': '#ffffff',
+        'red': '#ff0000',
+        'blue': '#0000ff',
+        'green': '#008000',
+        'yellow': '#ffff00',
+        'orange': '#ffa500',
+        'purple': '#800080',
+        'pink': '#ffc0cb',
+        'gray': '#808080',
+        'grey': '#808080',
+        'brown': '#a52a2a',
+        'navy': '#000080',
+        'maroon': '#800000'
+    };
+    
+    // Check if it's a hex color
+    if (color.startsWith('#')) {
+        return `background-color: ${color};`;
+    }
+    
+    // Check if it's in our color map
+    const lowerColor = color.toLowerCase();
+    if (colorMap[lowerColor]) {
+        return `background-color: ${colorMap[lowerColor]};`;
+    }
+    
+    // Default to gradient
+    return `background: linear-gradient(45deg, var(--primary-orange), var(--accent-gold));`;
+}
+
 // ===== PRODUCT FILTERING =====
 function filterProducts(category) {
-    AppState.currentFilter = category;
+    state.currentFilter = category;
     
     // Update filter buttons
     document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -506,20 +555,14 @@ function filterProducts(category) {
         }
     });
     
-    // Filter product cards
-    const productCards = document.querySelectorAll('.product-card');
+    // Filter category sections
     const categorySections = document.querySelectorAll('.category-section');
     
     if (category === 'all') {
-        // Show all products
         categorySections.forEach(section => {
             section.style.display = 'block';
         });
-        productCards.forEach(card => {
-            card.style.display = 'block';
-        });
     } else {
-        // Show only selected category
         categorySections.forEach(section => {
             if (section.dataset.category === category) {
                 section.style.display = 'block';
@@ -529,101 +572,35 @@ function filterProducts(category) {
         });
     }
     
-    // Smooth scroll to products section
-    const productsSection = document.getElementById('products');
-    if (productsSection) {
-        productsSection.scrollIntoView({ behavior: 'smooth' });
-    }
-    
-    // Track analytics
-    trackEvent('category_filter', { category });
+    console.log(`🔍 Filtered products by category: ${category}`);
 }
 
 // ===== PRODUCT INTERACTIONS =====
-function redirectToProduct(url) {
+function redirectToProduct(url, productName) {
     if (!url || url === '#') {
-        showNotification('Product link not available', 'warning');
+        showNotification('Enlace del producto no disponible', 'warning');
         return;
     }
     
-    // Track click
-    trackEvent('product_click', { url });
-    
-    // Open in new tab
-    window.open(url, '_blank', 'noopener,noreferrer');
-    showNotification('Opening product page...', 'success');
+    try {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        showNotification(`Abriendo ${productName}...`, 'success');
+    } catch (error) {
+        console.error('Error opening product:', error);
+        showNotification('Error al abrir el producto', 'error');
+    }
 }
 
 function quickViewProduct(productId) {
-    // Find product in current data
-    if (!AppState.products) return;
-    
-    let foundProduct = null;
-    
-    // Search through products array
-    const searchProducts = Array.isArray(AppState.products) ? AppState.products : 
-                          AppState.products.products || AppState.products.result || [];
-    
-    for (const item of searchProducts) {
-        const product = item.product || item;
-        if (String(product.id) === String(productId)) {
-            foundProduct = product;
-            break;
-        }
-    }
-    
-    if (foundProduct) {
-        showProductModal(foundProduct);
-        trackEvent('quick_view', { product_id: productId });
-    }
+    showNotification('Vista rápida próximamente disponible', 'info');
 }
 
-function toggleFavorite(productId) {
-    const productIdStr = String(productId);
-    const index = AppState.favorites.indexOf(productIdStr);
-    
-    if (index > -1) {
-        AppState.favorites.splice(index, 1);
-        showNotification('Removed from favorites', 'info');
-    } else {
-        AppState.favorites.push(productIdStr);
-        showNotification('Added to favorites', 'success');
-    }
-    
-    // Update localStorage
-    localStorage.setItem('dress_favorites', JSON.stringify(AppState.favorites));
-    
-    // Update UI
-    updateFavoritesDisplay();
-    updateProductCardFavorites();
-    
-    // Track analytics
-    trackEvent('favorite_toggle', { 
-        product_id: productId, 
-        action: index > -1 ? 'remove' : 'add' 
-    });
+function selectVariant(type, value, productId) {
+    showNotification(`${type === 'color' ? 'Color' : 'Talla'} seleccionada: ${value}`, 'success');
 }
 
-function updateProductCardFavorites() {
-    document.querySelectorAll('.favorite-btn').forEach(btn => {
-        const card = btn.closest('.product-card');
-        const productId = card?.dataset.productId;
-        
-        if (productId) {
-            const isFavorite = AppState.favorites.includes(productId);
-            const icon = btn.querySelector('i');
-            
-            if (isFavorite) {
-                btn.classList.add('active');
-                icon.className = 'fas fa-heart';
-                btn.title = 'Remove from favorites';
-            } else {
-                btn.classList.remove('active');
-                icon.className = 'far fa-heart';
-                btn.title = 'Add to favorites';
-            }
-        }
-    });
+function loadMoreProducts() {
+    showNotification('Carga de más productos próximamente disponible', 'info');
 }
 
 // ===== CONTACT FORM =====
@@ -644,116 +621,169 @@ async function handleContactSubmit(e) {
     
     // Validate
     if (!formData.name || !formData.email || !formData.message) {
-        showNotification('Please fill in all required fields', 'error');
+        showNotification('Por favor completa todos los campos requeridos', 'warning');
         return;
     }
     
     if (!isValidEmail(formData.email)) {
-        showNotification('Please enter a valid email address', 'error');
+        showNotification('Por favor ingresa un email válido', 'warning');
         return;
     }
     
     try {
         // Show loading state
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
         submitBtn.disabled = true;
         
-        // Submit to your contact API
-        await apiCall('/api/contact', 'POST', formData);
+        // Simulate form submission (replace with actual endpoint)
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
         // Success
-        showNotification('Message sent successfully! We\'ll get back to you soon.', 'success');
+        showNotification('¡Mensaje enviado exitosamente!', 'success');
         form.reset();
-        
-        // Track analytics
-        trackEvent('contact_submit', { success: true });
         
     } catch (error) {
         console.error('Contact form error:', error);
-        showNotification('Failed to send message. Please try again.', 'error');
-        trackEvent('contact_submit', { success: false, error: error.message });
+        showNotification('Error al enviar el mensaje. Inténtalo de nuevo.', 'error');
     } finally {
-        // Reset button
+        // Restore button
         submitBtn.innerHTML = originalText;
         submitBtn.disabled = false;
     }
 }
 
-// ===== API FUNCTIONS =====
-async function apiCall(endpoint, method = 'GET', body = null, retries = 0) {
-    const url = `${DRESS_CONFIG.API.BASE_URL}${endpoint}`;
+// ===== STATE MANAGEMENT =====
+function showLoadingState() {
+    const loadingEl = document.getElementById('products-loading');
+    const errorEl = document.getElementById('products-error');
+    const emptyEl = document.getElementById('products-empty');
     
-    const options = {
-        method,
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        },
-        signal: AbortSignal.timeout(DRESS_CONFIG.API.TIMEOUT)
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (errorEl) errorEl.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = 'none';
+}
+
+function hideLoadingState() {
+    const loadingEl = document.getElementById('products-loading');
+    if (loadingEl) loadingEl.style.display = 'none';
+}
+
+function showErrorState(message) {
+    const errorEl = document.getElementById('products-error');
+    const loadingEl = document.getElementById('products-loading');
+    const emptyEl = document.getElementById('products-empty');
+    
+    if (errorEl) {
+        errorEl.style.display = 'block';
+        const errorMessage = errorEl.querySelector('p');
+        if (errorMessage) {
+            errorMessage.textContent = message || 'Error al cargar productos';
+        }
+    }
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = 'none';
+}
+
+function hideErrorState() {
+    const errorEl = document.getElementById('products-error');
+    if (errorEl) errorEl.style.display = 'none';
+}
+
+function showEmptyState() {
+    const emptyEl = document.getElementById('products-empty');
+    const loadingEl = document.getElementById('products-loading');
+    const errorEl = document.getElementById('products-error');
+    
+    if (emptyEl) emptyEl.style.display = 'block';
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (errorEl) errorEl.style.display = 'none';
+}
+
+function hideEmptyState() {
+    const emptyEl = document.getElementById('products-empty');
+    if (emptyEl) emptyEl.style.display = 'none';
+}
+
+// ===== ANIMATIONS =====
+function setupProductAnimations() {
+    const productCards = document.querySelectorAll('.product-card');
+    
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('animate-fade-in-up');
+                observer.unobserve(entry.target);
+            }
+        });
+    }, { threshold: 0.1 });
+    
+    productCards.forEach(card => {
+        observer.observe(card);
+    });
+}
+
+// ===== NOTIFICATIONS =====
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fas ${getNotificationIcon(type)}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Show notification
+    setTimeout(() => notification.classList.add('show'), 100);
+    
+    // Hide and remove notification
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, CONFIG.UI.NOTIFICATION_DURATION);
+}
+
+function getNotificationIcon(type) {
+    const icons = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
     };
-    
-    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-        options.body = JSON.stringify(body);
-    }
-    
-    try {
-        const response = await fetch(url, options);
-        
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.status} ${response.statusText}`);
-        }
-        
-        const contentType = response.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-            return await response.json();
-        } else {
-            return await response.text();
-        }
-        
-    } catch (error) {
-        console.error(`❌ API call failed: ${method} ${endpoint}`, error);
-        
-        // Retry logic
-        if (retries < DRESS_CONFIG.API.RETRY_ATTEMPTS && error.name !== 'AbortError') {
-            console.log(`🔄 Retrying API call... Attempt ${retries + 1}`);
-            await new Promise(resolve => setTimeout(resolve, DRESS_CONFIG.API.RETRY_DELAY * (retries + 1)));
-            return apiCall(endpoint, method, body, retries + 1);
-        }
-        
-        throw error;
-    }
+    return icons[type] || icons.info;
 }
 
 // ===== UTILITY FUNCTIONS =====
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 function formatPrice(price, currency = 'USD') {
     if (price === null || price === undefined) {
-        return 'Contact for price';
+        return 'Precio no disponible';
     }
     
-    const currencySymbols = {
-        'USD': '$',
-        'EUR': '€',
-        'GBP': '£',
-        'CAD': 'C$',
-        'AUD': 'A$'
-    };
-    
-    const symbol = currencySymbols[currency] || currency;
-    const numPrice = parseFloat(price);
-    
-    if (isNaN(numPrice)) return 'Contact for price';
-    
-    return `${symbol}${numPrice.toFixed(2)}`;
+    try {
+        return new Intl.NumberFormat('es-ES', {
+            style: 'currency',
+            currency: currency,
+            minimumFractionDigits: 2
+        }).format(price);
+    } catch (error) {
+        return `$${price}`;
+    }
 }
 
 function formatCategoryName(category) {
     return category.charAt(0).toUpperCase() + category.slice(1).replace(/-/g, ' ');
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text || '';
-    return div.innerHTML;
 }
 
 function isValidEmail(email) {
@@ -762,116 +792,23 @@ function isValidEmail(email) {
 }
 
 function getPlaceholderImage() {
-    return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%23f8f9fa"/><text x="50%" y="50%" font-family="Arial" font-size="16" fill="%236c757d" text-anchor="middle" dy=".3em">No Image Available</text></svg>';
+    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDQwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMDAgMTUwQzE4Ny44NSAxNTAgMTc4IDE1OS44NSAxNzggMTcyUzE4Ny44NSAxOTQgMjAwIDE5NFMyMjIgMTg0LjE1IDIyMiAxNzJTMjEyLjE1IDE1MCAyMDAgMTUwWiIgZmlsbD0iIzlDQTNBRiIvPgo8cGF0aCBkPSJNMzAwIDI1MEgxMDBWMjcwSDMwMFYyNTBaIiBmaWxsPSIjOUNBM0FGIi8+Cjx0ZXh0IHg9IjIwMCIgeT0iMzIwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2QjcyODAiPlByb2R1Y3RvPC90ZXh0Pgo8L3N2Zz4K';
 }
 
 function handleImageError(img) {
     img.src = getPlaceholderImage();
-    img.onerror = null; // Prevent infinite loop
+    img.alt = 'Imagen no disponible';
 }
 
-// ===== CACHE FUNCTIONS =====
-function getCachedData(key) {
-    if (!DRESS_CONFIG.CACHE.ENABLE_CACHE) return null;
-    
-    const item = AppState.cache.get(key);
-    if (!item) return null;
-    
-    if (Date.now() > item.expires) {
-        AppState.cache.delete(key);
-        return null;
-    }
-    
-    return item.data;
-}
-
-function setCachedData(key, data) {
-    if (!DRESS_CONFIG.CACHE.ENABLE_CACHE) return;
-    
-    AppState.cache.set(key, {
-        data,
-        expires: Date.now() + DRESS_CONFIG.CACHE.PRODUCTS_TTL
-    });
-}
-
-// ===== UI STATE FUNCTIONS =====
-function showLoadingState() {
-    const loading = document.getElementById('products-loading');
-    const error = document.getElementById('products-error');
-    const empty = document.getElementById('products-empty');
-    
-    if (loading) loading.style.display = 'block';
-    if (error) error.style.display = 'none';
-    if (empty) empty.style.display = 'none';
-}
-
-function hideLoadingState() {
-    const loading = document.getElementById('products-loading');
-    if (loading) loading.style.display = 'none';
-}
-
-function showErrorState(message = 'Error loading products') {
-    const error = document.getElementById('products-error');
-    const loading = document.getElementById('products-loading');
-    const empty = document.getElementById('products-empty');
-    
-    if (error) {
-        error.style.display = 'block';
-        const errorText = error.querySelector('p');
-        if (errorText) {
-            errorText.innerHTML = `${message}. <button onclick="loadProducts(true)" style="color: var(--primary-orange); background: none; border: none; text-decoration: underline; cursor: pointer;">Retry</button>`;
-        }
-    }
-    if (loading) loading.style.display = 'none';
-    if (empty) empty.style.display = 'none';
-}
-
-function showEmptyState() {
-    const empty = document.getElementById('products-empty');
-    const loading = document.getElementById('products-loading');
-    const error = document.getElementById('products-error');
-    
-    if (empty) empty.style.display = 'block';
-    if (loading) loading.style.display = 'none';
-    if (error) error.style.display = 'none';
-}
-
-function hideErrorState() {
-    const error = document.getElementById('products-error');
-    if (error) error.style.display = 'none';
-}
-
-// ===== ANALYTICS =====
-async function trackEvent(eventType, data = {}) {
-    try {
-        await apiCall(DRESS_CONFIG.API.ENDPOINTS.ANALYTICS, 'POST', {
-            type: eventType,
-            timestamp: Date.now(),
-            url: window.location.href,
-            userAgent: navigator.userAgent,
-            ...data
-        });
-    } catch (error) {
-        // Silent fail for analytics
-        console.warn('Analytics tracking failed:', error);
-    }
-}
-
-// ===== GLOBAL FUNCTIONS (for HTML onclick handlers) =====
-window.changeSlide = changeSlide;
-window.currentSlide = currentSlide;
+// ===== EXPOSE GLOBAL FUNCTIONS =====
+window.scrollToProducts = scrollToProducts;
 window.filterProducts = filterProducts;
 window.redirectToProduct = redirectToProduct;
 window.quickViewProduct = quickViewProduct;
-window.toggleFavorite = toggleFavorite;
-window.handleImageError = handleImageError;
+window.selectVariant = selectVariant;
+window.loadMoreProducts = loadMoreProducts;
 window.loadProducts = loadProducts;
+window.toggleTheme = toggleTheme;
+window.handleImageError = handleImageError;
 
-// Export main functions for other scripts
-window.DRESS = {
-    loadProducts,
-    filterProducts,
-    trackEvent,
-    showNotification: showNotification,
-    AppState
-};
+console.log('📱 DRESS Website JavaScript loaded successfully');

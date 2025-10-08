@@ -1,4 +1,4 @@
-// worker.js — DRESS Cloudflare Worker (ESM-compatible)
+// worker-enhanced.js — DRESS Cloudflare Worker (Enhanced for Complete Product Variants)
 // Expects PRINTFUL_API_KEY as a secret (env.PRINTFUL_API_KEY)
 
 const CONFIG = {
@@ -10,10 +10,17 @@ const CONFIG = {
     'http://localhost:3000',
     'http://127.0.0.1:3000'
   ],
-  CACHE_TTL: 300, // seconds
+  CACHE_TTL: 600, // 10 minutes for product data
   RATE_LIMIT: {
     MAX_REQUESTS: 100,
     WINDOW: 60_000 // 1 minute in ms
+  },
+  // Enhanced product fetching settings
+  PRODUCT_SETTINGS: {
+    INCLUDE_VARIANTS: true,
+    INCLUDE_MOCKUPS: true,
+    MAX_CONCURRENT_REQUESTS: 5,
+    VARIANT_TIMEOUT: 10000
   }
 };
 
@@ -85,7 +92,7 @@ async function handleAPI(request, url, env) {
   }
 }
 
-// ---------- Printful proxy & processing ----------
+// ---------- Enhanced Printful proxy & processing ----------
 async function handlePrintfulAPI(request, url, env) {
   const printfulApiKey = env?.PRINTFUL_API_KEY;
   if (!printfulApiKey) {
@@ -104,26 +111,6 @@ async function handlePrintfulAPI(request, url, env) {
   const queryString = url.search || '';
   const targetUrl = `${CONFIG.PRINTFUL_API_BASE}${endpoint}${queryString}`;
 
-  // Prepare headers
-  const headers = {
-    'Authorization': `Bearer ${printfulApiKey}`,
-    'Accept': 'application/json'
-  };
-
-  // Attach body for non-GET
-  let body = null;
-  if (['POST', 'PUT', 'PATCH'].includes(request.method)) {
-    const contentType = request.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      // forward JSON body as-is
-      body = await request.text();
-      headers['Content-Type'] = 'application/json';
-    } else {
-      // for other content types, forward the raw body
-      body = await request.arrayBuffer();
-    }
-  }
-
   // Cache logic for GET
   const cacheKey = `printful:${request.method}:${targetUrl}`;
   if (request.method === 'GET') {
@@ -137,6 +124,24 @@ async function handlePrintfulAPI(request, url, env) {
           ...corsHeadersForRequest(request)
         }
       });
+    }
+  }
+
+  // Prepare headers
+  const headers = {
+    'Authorization': `Bearer ${printfulApiKey}`,
+    'Accept': 'application/json'
+  };
+
+  // Attach body for non-GET
+  let body = null;
+  if (['POST', 'PUT', 'PATCH'].includes(request.method)) {
+    const contentType = request.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      body = await request.text();
+      headers['Content-Type'] = 'application/json';
+    } else {
+      body = await request.arrayBuffer();
     }
   }
 
@@ -170,7 +175,8 @@ async function handlePrintfulAPI(request, url, env) {
       });
     }
 
-    const processed = processPrintfulResponse(data, endpoint, url.searchParams);
+    // Enhanced processing with variants
+    const processed = await processPrintfulResponseEnhanced(data, endpoint, url.searchParams, headers, printfulApiKey);
 
     // cache GET successful responses
     if (request.method === 'GET') {
@@ -197,7 +203,236 @@ async function handlePrintfulAPI(request, url, env) {
   }
 }
 
-// ---------- Helpers to map / process Printful data ----------
+// ---------- Enhanced Processing with Complete Variant Information ----------
+async function processPrintfulResponseEnhanced(data, endpoint, searchParams, headers, apiKey) {
+  const category = searchParams.get('category');
+  const includeVariants = searchParams.get('variants') !== 'false';
+
+  // Enhanced sync products format with complete variant data
+  if ((endpoint.includes('/sync/products') || endpoint.includes('/sync/products/')) && data.result) {
+    const productsArray = Array.isArray(data.result) ? data.result : data.result.resources ? data.result.resources : data.result;
+    const products = Array.isArray(productsArray) ? productsArray : [productsArray];
+
+    let filtered = products;
+    if (category) {
+      filtered = products.filter(p => {
+        const name = (p.name || '').toLowerCase();
+        const tags = (p.tags || []).join(' ').toLowerCase();
+        return name.includes(category.toLowerCase()) || tags.includes(category.toLowerCase());
+      });
+    }
+
+    // Enhanced transformation with variants
+    const transformedProducts = [];
+    
+    if (includeVariants && CONFIG.PRODUCT_SETTINGS.INCLUDE_VARIANTS) {
+      // Fetch detailed variant information for each product
+      const productPromises = filtered.slice(0, 20).map(async (product) => { // Limit to 20 products to avoid timeout
+        try {
+          const productDetails = await fetchProductVariants(product.id, headers, apiKey);
+          return await transformProductWithVariants(product, productDetails);
+        } catch (error) {
+          console.warn(`Failed to fetch variants for product ${product.id}:`, error);
+          return transformBasicProduct(product);
+        }
+      });
+      
+      const results = await Promise.allSettled(productPromises);
+      
+      results.forEach(result => {
+        if (result.status === 'fulfilled') {
+          transformedProducts.push(result.value);
+        }
+      });
+    } else {
+      // Basic transformation without variants
+      transformedProducts.push(...filtered.map(transformBasicProduct));
+    }
+
+    if (transformedProducts.length === 1) {
+      return { 
+        redirectUrl: transformedProducts[0].store_url, 
+        product: transformedProducts[0],
+        hasVariants: transformedProducts[0].variants?.length > 0
+      };
+    }
+
+    return { 
+      products: transformedProducts, 
+      total: transformedProducts.length, 
+      category,
+      hasVariants: transformedProducts.some(p => p.variants?.length > 0)
+    };
+  }
+
+  // store info
+  if (endpoint.includes('/store') && data.result) {
+    return {
+      store_url: data.result.website || data.result.store_url,
+      name: data.result.name,
+      currency: data.result.currency,
+      products_url: `${data.result.website || data.result.store_url}/products`
+    };
+  }
+
+  // fallback: return raw data
+  return data;
+}
+
+// Fetch detailed product variants from Printful API
+async function fetchProductVariants(productId, headers, apiKey) {
+  try {
+    const variantResponse = await fetch(`${CONFIG.PRINTFUL_API_BASE}/sync/products/${productId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Accept': 'application/json'
+      },
+      timeout: CONFIG.PRODUCT_SETTINGS.VARIANT_TIMEOUT
+    });
+    
+    if (!variantResponse.ok) {
+      throw new Error(`Failed to fetch variants for product ${productId}`);
+    }
+    
+    const variantData = await variantResponse.json();
+    return variantData.result || {};
+  } catch (error) {
+    console.warn(`Error fetching variants for product ${productId}:`, error);
+    return null;
+  }
+}
+
+// Transform product with complete variant information
+async function transformProductWithVariants(product, productDetails) {
+  const baseProduct = transformBasicProduct(product);
+  
+  if (!productDetails || !productDetails.sync_variants) {
+    return baseProduct;
+  }
+  
+  // Process variants with complete information
+  const variants = productDetails.sync_variants.map(variant => ({
+    id: variant.id,
+    external_id: variant.external_id,
+    sync_product_id: variant.sync_product_id,
+    name: variant.name,
+    synced: variant.synced,
+    variant_id: variant.variant_id,
+    retail_price: variant.retail_price,
+    currency: variant.currency,
+    is_ignored: variant.is_ignored,
+    sku: variant.sku,
+    
+    // Product variant details
+    product: variant.product ? {
+      variant_id: variant.product.variant_id,
+      product_id: variant.product.product_id,
+      image: variant.product.image,
+      name: variant.product.name
+    } : null,
+    
+    // Files (mockup images)
+    files: variant.files ? variant.files.map(file => ({
+      id: file.id,
+      type: file.type,
+      hash: file.hash,
+      url: file.url,
+      filename: file.filename,
+      mime_type: file.mime_type,
+      size: file.size,
+      width: file.width,
+      height: file.height,
+      x: file.x,
+      y: file.y,
+      scale: file.scale,
+      visible: file.visible,
+      is_default: file.is_default
+    })) : [],
+    
+    // Options (size, color, etc.)
+    options: variant.options || []
+  }));
+  
+  // Extract unique colors and sizes
+  const colors = extractUniqueOptions(variants, 'color');
+  const sizes = extractUniqueOptions(variants, 'size');
+  
+  // Find main product image
+  const mainImage = findMainProductImage(variants);
+  
+  return {
+    ...baseProduct,
+    variants,
+    variant_count: variants.length,
+    colors,
+    sizes,
+    main_image: mainImage,
+    has_variants: variants.length > 0,
+    sync_product: productDetails.sync_product || null
+  };
+}
+
+// Transform basic product without variants
+function transformBasicProduct(product) {
+  return {
+    id: product.id,
+    name: product.name,
+    thumbnail: product.thumbnail_url || product.image_url || null,
+    store_url: product.store_url || generateStoreUrl(product),
+    product_url: product.store_url || null,
+    price: product.retail_price || product.price || null,
+    currency: product.currency || 'USD',
+    tags: product.tags || [],
+    category: inferCategory(product.name),
+    status: product.status,
+    variants: [],
+    has_variants: false
+  };
+}
+
+// Extract unique color/size options from variants
+function extractUniqueOptions(variants, optionType) {
+  const options = new Set();
+  
+  variants.forEach(variant => {
+    if (variant.options) {
+      variant.options.forEach(option => {
+        if (option.id?.toLowerCase().includes(optionType)) {
+          options.add({
+            id: option.id,
+            value: option.value,
+            display_value: option.display_value || option.value
+          });
+        }
+      });
+    }
+  });
+  
+  return Array.from(options);
+}
+
+// Find the main/default product image from variants
+function findMainProductImage(variants) {
+  for (const variant of variants) {
+    if (variant.files && variant.files.length > 0) {
+      const defaultFile = variant.files.find(file => file.is_default);
+      if (defaultFile) {
+        return defaultFile.url;
+      }
+      // Fallback to first file
+      return variant.files[0].url;
+    }
+    
+    if (variant.product?.image) {
+      return variant.product.image;
+    }
+  }
+  
+  return null;
+}
+
+// ---------- Helper functions (same as before) ----------
 function mapPrintfulEndpoint(endpoint, searchParams) {
   const category = searchParams.get('category');
 
@@ -216,57 +451,6 @@ function mapPrintfulEndpoint(endpoint, searchParams) {
   return endpointMap[endpoint] || endpoint;
 }
 
-function processPrintfulResponse(data, endpoint, searchParams) {
-  const category = searchParams.get('category');
-
-  // sync products format
-  if ((endpoint.includes('/sync/products') || endpoint.includes('/sync/products/')) && data.result) {
-    const productsArray = Array.isArray(data.result) ? data.result : data.result.resources ? data.result.resources : data.result;
-    const products = Array.isArray(productsArray) ? productsArray : [productsArray];
-
-    let filtered = products;
-    if (category) {
-      filtered = products.filter(p => {
-        const name = (p.name || '').toLowerCase();
-        const tags = (p.tags || []).join(' ').toLowerCase();
-        return name.includes(category.toLowerCase()) || tags.includes(category.toLowerCase());
-      });
-    }
-
-    const transformed = filtered.map(product => ({
-      id: product.id,
-      name: product.name,
-      thumbnail: product.thumbnail_url || product.image_url || null,
-      store_url: product.store_url || generateStoreUrl(product),
-      product_url: product.store_url || null,
-      price: product.retail_price || product.price || null,
-      currency: product.currency || 'USD',
-      tags: product.tags || [],
-      category: inferCategory(product.name),
-      status: product.status
-    }));
-
-    if (transformed.length === 1) {
-      return { redirectUrl: transformed[0].store_url, product: transformed[0] };
-    }
-
-    return { products: transformed, total: transformed.length, category };
-  }
-
-  // store info
-  if (endpoint.includes('/store') && data.result) {
-    return {
-      store_url: data.result.website || data.result.store_url,
-      name: data.result.name,
-      currency: data.result.currency,
-      products_url: `${data.result.website || data.result.store_url}/products`
-    };
-  }
-
-  // fallback: return raw data
-  return data;
-}
-
 function generateStoreUrl(product) {
   const storeBase = 'https://dress-custom-apparel.printful.me';
   const productSlug = (product.name || 'product').toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -283,7 +467,7 @@ function inferCategory(productName = '') {
   return 'other';
 }
 
-// ---------- Contact & Analytics ----------
+// ---------- Contact & Analytics (same as before) ----------
 async function handleContactForm(request) {
   if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: jsonCORSHeaders(request) });
@@ -327,7 +511,7 @@ async function handleAnalytics(request) {
   }
 }
 
-// ---------- CORS ----------
+// ---------- CORS (same as before) ----------
 function handleCORS(request) {
   return new Response(null, { status: 204, headers: corsHeadersForRequest(request) });
 }
@@ -349,7 +533,7 @@ function jsonCORSHeaders(request) {
   return { 'Content-Type': 'application/json', ...corsHeadersForRequest(request) };
 }
 
-// ---------- Rate limiting (per-instance) ----------
+// ---------- Rate limiting (same as before) ----------
 function checkRateLimit(request) {
   const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('x-forwarded-for') || 'unknown';
   const now = Date.now();
@@ -373,7 +557,7 @@ function checkRateLimit(request) {
   return { allowed: true, remaining: CONFIG.RATE_LIMIT.MAX_REQUESTS - recent.length };
 }
 
-// ---------- Simple in-memory cache ----------
+// ---------- Simple in-memory cache (same as before) ----------
 async function getCache(key) {
   const item = cache.get(key);
   if (!item) return null;
@@ -388,16 +572,17 @@ async function setCache(key, data, ttl) {
   cache.set(key, { data, expires: Date.now() + ttl * 1000 });
 }
 
-// ---------- Health & errors ----------
+// ---------- Health & errors (same as before) ----------
 function handleHealthCheck(request, env) {
   return new Response(JSON.stringify({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '2.0.0',
+    version: '2.1.0-enhanced',
     services: {
       printful_configured: !!env?.PRINTFUL_API_KEY,
       cache_items: cache.size,
-      rate_limit_keys: rateLimitStore.size
+      rate_limit_keys: rateLimitStore.size,
+      variant_support: CONFIG.PRODUCT_SETTINGS.INCLUDE_VARIANTS
     }
   }), {
     headers: jsonCORSHeaders(request)
